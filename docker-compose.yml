@@ -1,0 +1,254 @@
+# =============================================================================
+# DataTrekServices — Docker Compose
+# =============================================================================
+#
+# PURPOSE
+#   Provides auxiliary data services for an existing Wikibase installation
+#   running on a native LAMP stack. This stack does NOT include Wikibase,
+#   MediaWiki, or MariaDB — those run on the host.
+#
+# SERVICES
+#   - wdqs           : Blazegraph SPARQL engine
+#   - wdqs-updater   : polls Wikibase API for changes, keeps Blazegraph in sync
+#   - wdqs-proxy     : nginx enforcing read-only access and query timeout on Blazegraph
+#   - wdqs-frontend  : web UI for running SPARQL queries
+#   - elasticsearch  : search backend for MediaWiki CirrusSearch extension
+#   - quickstatements: batch editing tool for Wikibase
+#   - traefik        : internal HTTP router (no TLS — terminated by host reverse proxy)
+#
+# QUICK START
+#   cp template.env .env
+#   nano .env             # fill in your values
+#   docker compose up -d
+#
+# REVERSE PROXY INTEGRATION
+#   Traefik listens on 127.0.0.1:${TRAEFIK_HOST_PORT} (default 8880).
+#   Your host reverse proxy (Apache, Nginx, Caddy…) must proxy traffic for
+#   WDQS_PUBLIC_HOST and QUICKSTATEMENTS_PUBLIC_HOST to that port.
+#   See docs/apache-integration.md for Apache vhost examples.
+#
+#   For standalone use without a host reverse proxy, set
+#   TRAEFIK_BIND_ADDRESS=0.0.0.0 in .env so Traefik is publicly reachable.
+#
+# IMAGES
+#   All images are from the official Wikibase Suite by Wikimedia Germany.
+#   See https://hub.docker.com/u/wikibase
+#
+# =============================================================================
+
+name: datatrek-services
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # WDQS — Blazegraph SPARQL engine
+  # ---------------------------------------------------------------------------
+  # Stores Wikibase entity data as RDF triples and answers SPARQL queries.
+  # This is the heaviest container (~2 GB RAM).
+  #
+  # Never exposed directly — all access goes through wdqs-proxy.
+  # ---------------------------------------------------------------------------
+  wdqs:
+    image: wikibase/wdqs:2
+    command: /runBlazegraph.sh
+    restart: unless-stopped
+    # Blazegraph needs a high open-file limit to avoid this abort:
+    # "library initialization failed - unable to allocate file descriptor table"
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 32768
+    volumes:
+      - wdqs-data:/wdqs/data
+    healthcheck:
+      test: curl --silent --fail localhost:9999/bigdata/namespace/wdq/sparql
+      interval: 10s
+      start_period: 2m
+
+  # ---------------------------------------------------------------------------
+  # WDQS Updater — keeps Blazegraph in sync with Wikibase
+  # ---------------------------------------------------------------------------
+  # Polls the Wikibase API for recent changes and feeds them into Blazegraph.
+  #
+  # Reaches Wikibase via its public hostname (WIKIBASE_HOST), resolving through
+  # public DNS. This works whether Wikibase is on a separate server or on the
+  # same host — the container connects through Apache like any external client.
+  # ---------------------------------------------------------------------------
+  wdqs-updater:
+    image: wikibase/wdqs:2
+    command: /runUpdate.sh
+    restart: unless-stopped
+    depends_on:
+      wdqs:
+        condition: service_healthy
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 32768
+    environment:
+      # Public hostname of your Wikibase instance (no scheme, no trailing slash).
+      # The updater calls: ${WIKIBASE_SCHEME}://${WIKIBASE_HOST}${WIKIBASE_API_PATH}
+      WIKIBASE_HOST: ${WIKIBASE_HOST}
+      WIKIBASE_SCHEME: ${WIKIBASE_SCHEME:-https}
+      # Path to the Wikibase API script, e.g. /dt/api.php or /w/api.php
+      WIKIBASE_API_PATH: ${WIKIBASE_API_PATH}
+      # Must match $wgServer in your Wikibase LocalSettings.php exactly.
+      # Used as the RDF concept URI prefix for all entities.
+      WIKIBASE_CONCEPT_URI: ${WIKIBASE_CONCEPT_URI}
+      # Wikibase entity namespace IDs (120=Item, 146=Property are standard defaults).
+      WIKIBASE_ENTITY_NAMESPACES: ${WIKIBASE_ENTITY_NAMESPACES:-120,146}
+
+  # ---------------------------------------------------------------------------
+  # WDQS Proxy — read-only nginx gateway in front of Blazegraph
+  # ---------------------------------------------------------------------------
+  # Enforces three constraints on all SPARQL access:
+  #   1. Only exposes /bigdata/namespace/.../sparql, /ldf, /assets
+  #      (Blazegraph's port 9999 has admin/write endpoints — never expose it)
+  #   2. Sets X-BIGDATA-READ-ONLY: yes — prevents write queries via SPARQL
+  #   3. Sets X-BIGDATA-MAX-QUERY-MILLIS: 60000 — kills queries after 60s
+  #
+  # wdqs-frontend connects to this container, not to wdqs directly.
+  # Not routed through Traefik — has no public-facing UI of its own.
+  # ---------------------------------------------------------------------------
+  wdqs-proxy:
+    image: wikibase/wdqs-proxy:1
+    restart: unless-stopped
+    depends_on:
+      wdqs:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # WDQS Frontend — SPARQL query web interface
+  # ---------------------------------------------------------------------------
+  # Browser-based SPARQL query editor. Sends queries to wdqs-proxy.
+  # Publicly reachable via: host reverse proxy → Traefik → this container.
+  #
+  # Configured via two volume-mounted files:
+  #   custom-config.json : branding, RDF prefixes, API endpoints, examples page
+  #   default.conf       : nginx config adding /sparql shortcut URL
+  # ---------------------------------------------------------------------------
+  wdqs-frontend:
+    image: wikibase/wdqs-frontend:2
+    restart: unless-stopped
+    depends_on:
+      - wdqs-proxy
+    volumes:
+      # Branding, prefixes, and SPARQL endpoint configuration.
+      - ./config/wdqs-frontend-custom-config.json:/templates/custom-config.json:ro
+      # Adds /sparql shortcut that rewrites to the full Blazegraph path.
+      - ./config/wdqs-frontend-default.conf:/templates/default.conf:ro
+    environment:
+      # Public SPARQL endpoint URL (used in the UI for browser-side API calls).
+      WDQS_PUBLIC_URL: ${WDQS_PUBLIC_SCHEME:-https}://${WDQS_PUBLIC_HOST}/sparql
+      # Public Wikibase API URL (used to resolve entity labels in the UI).
+      WIKIBASE_PUBLIC_URL: ${WIKIBASE_PUBLIC_SCHEME:-https}://${WIKIBASE_HOST}${WIKIBASE_API_PATH}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wdqs-frontend.rule=Host(`${WDQS_PUBLIC_HOST}`)"
+      - "traefik.http.routers.wdqs-frontend.entrypoints=web"
+      - "traefik.http.services.wdqs-frontend.loadbalancer.server.port=80"
+    healthcheck:
+      test: curl --silent --fail localhost
+      interval: 10s
+      start_period: 2m
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch — search backend for MediaWiki CirrusSearch
+  # ---------------------------------------------------------------------------
+  # Provides full-text search for your MediaWiki/Wikibase installation.
+  # The host MediaWiki connects to this container via the exposed port.
+  #
+  # In LocalSettings.php set:
+  #   $wgCirrusSearchServers = [ '127.0.0.1' ];
+  #   // if ELASTICSEARCH_HOST_PORT differs from 9200, also set:
+  #   $wgCirrusSearchPort = <ELASTICSEARCH_HOST_PORT>;
+  #
+  # Bound to 127.0.0.1 only — not publicly accessible.
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    image: wikibase/elasticsearch:1
+    restart: unless-stopped
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    environment:
+      discovery.type: single-node
+      # Heap: keep -Xms and -Xmx equal; do not exceed 50% of available RAM.
+      ES_JAVA_OPTS: -Xms512m -Xmx512m -Dlog4j2.formatMsgNoLookups=true
+    ports:
+      - "127.0.0.1:${ELASTICSEARCH_HOST_PORT:-9200}:9200"
+    healthcheck:
+      test: curl --silent --fail localhost:9200
+      interval: 10s
+      start_period: 2m
+
+  # ---------------------------------------------------------------------------
+  # QuickStatements — batch editing tool for Wikibase
+  # ---------------------------------------------------------------------------
+  # Web UI for importing and editing large amounts of Wikibase data.
+  # Authenticates via OAuth against your Wikibase instance.
+  # Requires an OAuth consumer registered on Wikibase before first use.
+  # Publicly reachable via: host reverse proxy → Traefik → this container.
+  # ---------------------------------------------------------------------------
+  quickstatements:
+    image: wikibase/quickstatements:1
+    restart: unless-stopped
+    volumes:
+      # Persistent OAuth token storage — survives container restarts.
+      - quickstatements-data:/quickstatements/data
+    environment:
+      # Public URL where QuickStatements itself is served.
+      QUICKSTATEMENTS_PUBLIC_URL: ${QUICKSTATEMENTS_PUBLIC_SCHEME:-https}://${QUICKSTATEMENTS_PUBLIC_HOST}
+      # Public URL of the Wikibase instance QuickStatements talks to.
+      WIKIBASE_PUBLIC_URL: ${WIKIBASE_PUBLIC_SCHEME:-https}://${WIKIBASE_HOST}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.quickstatements.rule=Host(`${QUICKSTATEMENTS_PUBLIC_HOST}`)"
+      - "traefik.http.routers.quickstatements.entrypoints=web"
+      - "traefik.http.services.quickstatements.loadbalancer.server.port=80"
+    healthcheck:
+      test: curl --silent --fail localhost
+      interval: 10s
+      start_period: 2m
+
+  # ---------------------------------------------------------------------------
+  # Traefik — internal HTTP reverse proxy
+  # ---------------------------------------------------------------------------
+  # Routes HTTP from the host reverse proxy to the correct container.
+  # Reads routing rules from Docker labels on each service above.
+  #
+  # Does NOT handle TLS — terminated externally by Apache + Anubis (or any
+  # other reverse proxy). There is intentionally no port 443 here.
+  #
+  # TRAEFIK_BIND_ADDRESS in .env controls who can reach Traefik:
+  #   127.0.0.1 → only the host machine (default; use with Apache/Nginx/Caddy)
+  #   0.0.0.0   → publicly reachable (standalone mode, no host reverse proxy)
+  # ---------------------------------------------------------------------------
+  traefik:
+    image: traefik:3
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+      - "--accesslog.format=common"
+      # Uncomment for Traefik dashboard (also expose 127.0.0.1:8080:8080 below):
+      # - "--api.dashboard=true"
+      # - "--api.insecure=true"
+      # - "--log.level=DEBUG"
+    ports:
+      - "${TRAEFIK_BIND_ADDRESS:-127.0.0.1}:${TRAEFIK_HOST_PORT:-8880}:80"
+      # - "127.0.0.1:8080:8080"   # Traefik dashboard (see above)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+# =============================================================================
+# Named volumes
+# =============================================================================
+volumes:
+  # Blazegraph RDF store. Losing this requires a full reload from a Wikibase dump.
+  wdqs-data:
+  # Elasticsearch index. Losing this requires re-running CirrusSearch setup.
+  elasticsearch-data:
+  # QuickStatements OAuth tokens and job queue.
+  quickstatements-data:

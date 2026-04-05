@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-compose:
+    name: Validate docker-compose.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy template.env to .env
+        run: cp template.env .env
+
+      - name: Fill required variables with placeholder values
+        run: |
+          sed -i 's/^WIKIBASE_HOST=$/WIKIBASE_HOST=wikibase.example/' .env
+          sed -i 's/^WIKIBASE_API_PATH=$/WIKIBASE_API_PATH=\/w\/api.php/' .env
+          sed -i 's/^WIKIBASE_CONCEPT_URI=$/WIKIBASE_CONCEPT_URI=https:\/\/wikibase.example/' .env
+          sed -i 's/^WDQS_PUBLIC_HOST=$/WDQS_PUBLIC_HOST=query.example/' .env
+          sed -i 's/^QUICKSTATEMENTS_PUBLIC_HOST=$/QUICKSTATEMENTS_PUBLIC_HOST=qs.example/' .env
+          sed -i 's/^WIKIBASE_NAME=$/WIKIBASE_NAME=Example/' .env
+          sed -i 's/^WIKIBASE_LOGO=$/WIKIBASE_LOGO=https:\/\/example.org\/logo.png/' .env
+          sed -i 's/^WIKIBASE_FAVICON=$/WIKIBASE_FAVICON=https:\/\/example.org\/favicon.ico/' .env
+          sed -i 's/^WIKIBASE_COPYRIGHT=$/WIKIBASE_COPYRIGHT=https:\/\/example.org\/about/' .env
+          sed -i 's/^WIKIBASE_EXAMPLES_PAGE_TITLE=$/WIKIBASE_EXAMPLES_PAGE_TITLE=Help:Examples/' .env
+
+      - name: Validate compose file syntax
+        run: docker compose config --quiet

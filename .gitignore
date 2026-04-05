@@ -1,0 +1,2 @@
+# Active configuration — contains secrets, never committed
+.env
