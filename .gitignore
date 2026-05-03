@@ -1,2 +1,18 @@
 # Active configuration — contains secrets, never committed
 .env
+
+# Binary assets — not suitable for git
+*.ico
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# JetBrains / VSCode IDE files
+.idea/
+.vscode/
+
+# Docker runtime artifacts that may appear locally
+*.log

@@ -193,18 +193,32 @@ services:
     image: wikibase/quickstatements:1
     restart: unless-stopped
     volumes:
-      # Persistent OAuth token storage — survives container restarts.
+      # Persistent data volume (OAuth token storage, logs)
       - quickstatements-data:/quickstatements/data
-    environment:
-      # Public URL where QuickStatements itself is served.
-      QUICKSTATEMENTS_PUBLIC_URL: ${QUICKSTATEMENTS_PUBLIC_SCHEME:-https}://${QUICKSTATEMENTS_PUBLIC_HOST}
-      # Public URL of the Wikibase instance QuickStatements talks to.
-      WIKIBASE_PUBLIC_URL: ${WIKIBASE_PUBLIC_SCHEME:-https}://${WIKIBASE_HOST}
+      # OAuth credentials template — substituted at container startup
+      - ./config/quickstatements-oauth.ini:/templates/oauth.ini
+      # Site configuration template — substituted at container startup
+      - ./config/quickstatements-config.json:/templates/config.json
+      # Custom favicon
+      - ./config/quickstatements-favicon.ico:/var/www/html/quickstatements/public_html/favicon.ico
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.quickstatements.rule=Host(`${QUICKSTATEMENTS_PUBLIC_HOST}`)"
-      - "traefik.http.routers.quickstatements.entrypoints=web"
-      - "traefik.http.services.quickstatements.loadbalancer.server.port=80"
+    environment:
+      # Wikibase connection
+      WIKIBASE_SCHEME: ${WIKIBASE_SCHEME}
+      WIKIBASE_HOST: ${WIKIBASE_HOST}
+      WIKIBASE_API_PATH: ${WIKIBASE_API_PATH}
+      WIKIBASE_PUBLIC_URL: ${WIKIBASE_SCHEME}://${WIKIBASE_HOST}
+      # QuickStatements public URL (used for OAuth callback)
+      QUICKSTATEMENTS_PUBLIC_URL: https://${QUICKSTATEMENTS_PUBLIC_HOST}
+      QUICKSTATEMENTS_HOST: quickstatements
+      # OAuth credentials
+      OAUTH_CONSUMER_KEY: ${OAUTH_CONSUMER_KEY}
+      OAUTH_CONSUMER_SECRET: ${OAUTH_CONSUMER_SECRET}
+      OAUTH_SCRIPT_PATH: ${OAUTH_SCRIPT_PATH}
+      # Site name (maps WIKIBASE_NAME to SITENAME used in config templates)
+      SITENAME: ${WIKIBASE_NAME}
     healthcheck:
       test: curl --silent --fail localhost
       interval: 10s
