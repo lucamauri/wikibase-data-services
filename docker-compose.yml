@@ -92,11 +92,15 @@ services:
       WIKIBASE_SCHEME: ${WIKIBASE_SCHEME:-https}
       # Path to the Wikibase API script, e.g. /dt/api.php or /w/api.php
       WIKIBASE_API_PATH: ${WIKIBASE_API_PATH}
-      # Must match $wgServer in your Wikibase LocalSettings.php exactly.
-      # Used as the RDF concept URI prefix for all entities.
-      WIKIBASE_CONCEPT_URI: ${WIKIBASE_CONCEPT_URI}
+      # Assembled from parts to ensure correct format: scheme://host/
+      # Do NOT set WIKIBASE_CONCEPT_URI in .env — it is built here intentionally.
+      WIKIBASE_CONCEPT_URI: ${WIKIBASE_SCHEME}://${WIKIBASE_HOST}/
       # Wikibase entity namespace IDs (120=Item, 146=Property are standard defaults).
-      WIKIBASE_ENTITY_NAMESPACES: ${WIKIBASE_ENTITY_NAMESPACES:-120,146}
+      WIKIBASE_ENTITY_NAMESPACES: ${WIKIBASE_ENTITY_NAMESPACES:-120,122}
+      UPDATER_DELAY: ${UPDATER_DELAY}
+    volumes:
+      # Mount our improved custom script over the upstream /runUpdate.sh
+      - ./config/wdqs-updater-runUpdate.sh:/runUpdate.sh
 
   # ---------------------------------------------------------------------------
   # WDQS Proxy — read-only nginx gateway in front of Blazegraph
