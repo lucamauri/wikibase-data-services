@@ -10,7 +10,6 @@
 # SERVICES
 #   - wdqs           : Blazegraph SPARQL engine
 #   - wdqs-updater   : polls Wikibase API for changes, keeps Blazegraph in sync
-#   - wdqs-proxy     : nginx enforcing read-only access and query timeout on Blazegraph
 #   - wdqs-frontend  : web UI for running SPARQL queries
 #   - elasticsearch  : search backend for MediaWiki CirrusSearch extension
 #   - quickstatements: batch editing tool for Wikibase
@@ -46,7 +45,7 @@ services:
   # Stores Wikibase entity data as RDF triples and answers SPARQL queries.
   # This is the heaviest container (~2 GB RAM).
   #
-  # Never exposed directly — all access goes through wdqs-proxy.
+  # Never exposed directly — all access goes through wdqs-frontend.
   # ---------------------------------------------------------------------------
   wdqs:
     image: wikibase/wdqs:2
@@ -103,25 +102,6 @@ services:
       - ./config/wdqs-updater-runUpdate.sh:/runUpdate.sh
 
   # ---------------------------------------------------------------------------
-  # WDQS Proxy — read-only nginx gateway in front of Blazegraph
-  # ---------------------------------------------------------------------------
-  # Enforces three constraints on all SPARQL access:
-  #   1. Only exposes /bigdata/namespace/.../sparql, /ldf, /assets
-  #      (Blazegraph's port 9999 has admin/write endpoints — never expose it)
-  #   2. Sets X-BIGDATA-READ-ONLY: yes — prevents write queries via SPARQL
-  #   3. Sets X-BIGDATA-MAX-QUERY-MILLIS: 60000 — kills queries after 60s
-  #
-  # wdqs-frontend connects to this container, not to wdqs directly.
-  # Not routed through Traefik — has no public-facing UI of its own.
-  # ---------------------------------------------------------------------------
-  wdqs-proxy:
-    image: wikibase/wdqs-proxy:1
-    restart: unless-stopped
-    depends_on:
-      wdqs:
-        condition: service_healthy
-
-  # ---------------------------------------------------------------------------
   # WDQS Frontend — SPARQL query web interface
   # ---------------------------------------------------------------------------
   # Browser-based SPARQL query editor. Sends queries to wdqs-proxy.
@@ -134,7 +114,8 @@ services:
   wdqs-frontend:
     image: wikibase/wdqs-frontend:2
     depends_on:
-      - wdqs-proxy
+      wdqs:
+        condition: service_healthy
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
@@ -142,7 +123,7 @@ services:
     environment:
       # Required by entrypoint.sh validation checks
       WIKIBASE_HOST: ${WIKIBASE_HOST}
-      WDQS_HOST: wdqs-proxy
+      WDQS_HOST: wdqs
       # Used by envsubst in nginx-default.conf.template
       WIKIBASE_SCHEME: ${WIKIBASE_SCHEME}
       # Used by envsubst in wdqs-frontend-config.json.template
