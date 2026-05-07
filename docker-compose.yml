@@ -183,10 +183,22 @@ services:
   # Authenticates via OAuth against your Wikibase instance.
   # Requires an OAuth consumer registered on Wikibase before first use.
   # Publicly reachable via: host reverse proxy → Traefik → this container.
+  #
+  # Built from local Dockerfile.quickstatements which adds:
+  #   - mysqli PHP extension (missing from upstream image)
+  #   - wrapper entrypoint for replica.my.cnf credential substitution
   # ---------------------------------------------------------------------------
   quickstatements:
-    image: wikibase/quickstatements:1
+    build:
+      context: .
+      dockerfile: Dockerfile.quickstatements
     restart: unless-stopped
+    extra_hosts:
+      # Redirect Wikimedia Toolforge DB hostname to the Docker bridge
+      # gateway, where host MariaDB listens on port 3306.
+      # This allows ToolforgeCommon (magnustools) to connect to our
+      # local MariaDB without code changes.
+      - "tools.db.svc.wikimedia.cloud:172.18.0.1"
     volumes:
       # Persistent data volume (OAuth token storage, logs)
       - quickstatements-data:/quickstatements/data
@@ -194,6 +206,8 @@ services:
       - ./config/quickstatements-oauth.ini:/templates/oauth.ini
       # Site configuration template — substituted at container startup
       - ./config/quickstatements-config.json:/templates/config.json
+      # DB credentials template — substituted by our wrapper entrypoint
+      - ./config/quickstatements-replica.my.cnf:/templates/replica.my.cnf
       # Custom favicon
       - ./config/quickstatements-favicon.ico:/var/www/html/quickstatements/public_html/favicon.ico
     labels:
@@ -214,6 +228,9 @@ services:
       OAUTH_SCRIPT_PATH: ${OAUTH_SCRIPT_PATH}
       # Site name (maps WIKIBASE_NAME to SITENAME used in config templates)
       SITENAME: ${WIKIBASE_NAME}
+      # Batch database credentials (substituted into replica.my.cnf)
+      QS_DB_USER: ${QS_DB_USER}
+      QS_DB_PASSWORD: ${QS_DB_PASSWORD}
     healthcheck:
       test: curl --silent --fail localhost
       interval: 10s
@@ -261,3 +278,9 @@ volumes:
   elasticsearch-data:
   # QuickStatements OAuth tokens and job queue.
   quickstatements-data:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16

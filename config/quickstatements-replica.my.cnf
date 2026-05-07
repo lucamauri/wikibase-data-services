@@ -1,0 +1,17 @@
+; quickstatements-replica.my.cnf
+;
+; Template — substituted by quickstatements-entrypoint.sh via envsubst
+; before Apache starts. Do not put literal credentials here.
+;
+; ToolforgeCommon->getDBpassword() reads the substituted file from:
+;   /data/project/nobody/replica.my.cnf
+; (PHP scripts in this container are owned by 'nobody', uid 65534)
+;
+; We do NOT use local=true — that hardcodes 127.0.0.1:3308 (container
+; loopback). Instead, extra_hosts in docker-compose.yml maps
+; tools.db.svc.wikimedia.cloud → 172.18.0.1 (Docker bridge gateway),
+; where host MariaDB now listens on port 3306.
+
+[client]
+user=${QS_DB_USER}
+password=${QS_DB_PASSWORD}
