@@ -1,6 +1,6 @@
 # ADR 003 — wdqs-proxy is kept despite being absent from upstream deploy
 
-**Status:** Accepted  
+**Status:** **Superseded by ADR 004**  
 **Date:** April 2026
 
 ## Context

@@ -1,31 +1,102 @@
+# =============================================================================
 # Dockerfile.quickstatements
 #
-# Extends upstream wikibase/quickstatements:1 to:
-#   1. Add the mysqli PHP extension (missing from upstream, required
-#      for batch processing via ToolforgeCommon/magnustools)
-#   2. Add a wrapper entrypoint that runs envsubst on replica.my.cnf
-#      before handing off to the upstream entrypoint
-#   3. Add a cron job to run bot.php every minute, which picks up
-#      batches in INIT/RUN status and processes them
+# Extends the upstream wikibase/quickstatements:1 image to make batch
+# processing work in a self-hosted (non-Wikimedia) environment.
 #
-# Base image: PHP 8.3.8 on Debian 12 (bookworm)
+# WHY THIS DOCKERFILE EXISTS
+# --------------------------
+# The upstream image is designed for Wikimedia Toolforge infrastructure.
+# Three things are missing or incompatible with a standalone deployment:
+#
+#   1. The `mysqli` PHP extension is not compiled into the upstream image.
+#      QuickStatements uses the `magnustools` library (ToolforgeCommon) for
+#      all database access, which requires `mysqli` with no fallback.
+#      Without it, batch mode crashes immediately with:
+#        Fatal error: Uncaught Error: Class "mysqli" not found
+#      Interactive ("Run") mode is unaffected because it uses the Wikibase
+#      API directly and never touches the database.
+#
+#   2. There is no batch runner process. On Wikimedia Toolforge, batches are
+#      executed by the `jsub` job scheduler, which does not exist here.
+#      Without a runner, batches are created in the database but stay in
+#      INIT status forever — the progress bar never moves.
+#      Fix: run bot.php every minute via cron inside the container.
+#
+#   3. The database credentials file (replica.my.cnf) does not exist in the
+#      container by default, and the upstream entrypoint does not create it.
+#      Fix: a wrapper entrypoint substitutes credentials from environment
+#      variables at startup and writes the file to the expected path.
+#
+# Full details and host-side setup steps:
+#   docs/adr-quickstatements-batch-fix.md
+#
+# BASE IMAGE
+# ----------
+# wikibase/quickstatements:1 — PHP 8.3 on Debian 12 (bookworm)
+# Rebuild this image when the upstream is updated:
+#   docker compose build quickstatements
+# =============================================================================
 
 FROM wikibase/quickstatements:1
 
-# Add mysqli PHP extension
+# -----------------------------------------------------------------------------
+# Fix 1 — Add the mysqli PHP extension
+# -----------------------------------------------------------------------------
+# docker-php-ext-install is a helper script included in all official PHP
+# Docker images. It compiles and enables the named extension against the
+# PHP version already in the image — no manual phpize needed.
+#
+# mysqli is required by ToolforgeCommon->getDB() for all database operations,
+# including batch creation, status tracking, and the batch runner (bot.php).
+# -----------------------------------------------------------------------------
 RUN docker-php-ext-install mysqli
 
-# Install cron daemon
-RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+# -----------------------------------------------------------------------------
+# Fix 2 — Add a cron-based batch runner
+# -----------------------------------------------------------------------------
+# bot.php is QuickStatements' batch execution script. It picks up one batch
+# in INIT or RUN status and processes it, then exits.
+#
+# On Wikimedia Toolforge this is triggered by the jsub job scheduler.
+# In a self-hosted container there is no jsub, so we install cron and run
+# bot.php every minute instead.
+#
+# The job runs as www-data (the same user Apache workers run as) so it has
+# the same filesystem and credential access as the web process.
+#
+# Logs go to /var/log/quickstatements/bot.log — check this file first
+# when debugging batch execution problems.
+#
+# apt-get clean and rm -rf /var/lib/apt/lists/* keep the image layer small
+# by discarding the package index after installation.
+# -----------------------------------------------------------------------------
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cron \
+    && rm -rf /var/lib/apt/lists/*
 
-# Add crontab entry to run the batch bot every minute.
-# Runs as www-data so it has the same DB credentials access as Apache.
-# Logs to /var/log/quickstatements/bot.log for debugging.
-RUN echo "* * * * * www-data /usr/local/bin/php /var/www/html/quickstatements/bot.php single_batch >> /var/log/quickstatements/bot.log 2>&1" \
+RUN echo "* * * * * www-data /usr/local/bin/php \
+/var/www/html/quickstatements/bot.php single_batch \
+>> /var/log/quickstatements/bot.log 2>&1" \
     > /etc/cron.d/quickstatements-bot \
     && chmod 0644 /etc/cron.d/quickstatements-bot
 
-# Copy wrapper entrypoint
+# -----------------------------------------------------------------------------
+# Fix 3 — Wrapper entrypoint for credential injection
+# -----------------------------------------------------------------------------
+# The upstream entrypoint starts Apache directly. Our wrapper runs first and:
+#   1. Creates /data/project/nobody/ (the Toolforge-convention path where
+#      ToolforgeCommon looks for replica.my.cnf)
+#   2. Runs envsubst on the replica.my.cnf template (mounted via compose),
+#      substituting ${QS_DB_USER} and ${QS_DB_PASSWORD} from the environment
+#   3. Sets ownership root:www-data and permissions 640 so Apache workers
+#      can read the file but it is not world-readable
+#   4. Starts cron in the background
+#   5. Hands off to the upstream /entrypoint.sh (which handles oauth.ini,
+#      config.json substitution, then starts Apache)
+#
+# Credentials are never baked into the image — they are injected at runtime.
+# -----------------------------------------------------------------------------
 COPY config/quickstatements-entrypoint.sh /quickstatements-entrypoint.sh
 RUN chmod +x /quickstatements-entrypoint.sh
 
