@@ -5,12 +5,14 @@
 
 ## Context
 
-After deploying `wikibase/quickstatements:1`, two issues were observed:
+After deploying `wikibase/quickstatements:1`, four issues were observed:
 
 1. Interactive ("Run") imports worked correctly.
 2. Batch mode ("Run in background") showed a progress bar stuck at 0% indefinitely.
 3. The batch list page (`/#/batches/username`) never loaded — the browser repeated
    calls to `api.php?action=get_batches_info` every 5 seconds with no response.
+4. After fixes 1–3, batches progressed but every command failed with
+   "Item Qxxx is not available" even though the Wikibase API was reachable.
 
 HAR analysis of the failing requests revealed a PHP fatal error returned as HTTP 200:
 
@@ -19,7 +21,7 @@ Fatal error: Uncaught Error: Class "mysqli" not found
 in ToolforgeCommon.php:212
 ```
 
-Deeper investigation revealed three compounding problems in the upstream image.
+Deeper investigation revealed four compounding problems in the upstream image.
 
 ---
 
@@ -74,6 +76,26 @@ cron inside the container.
 
 ---
 
+## Problem 4 — magnustools curl_multi sends no User-Agent header
+
+After DataTrek migrated to `unitedwikitrek` (same host as QuickStatements),
+batches still failed with "Item Qxxx is not available". Investigation showed:
+
+- `getMultipleURLsInParallel()` in `magnustools/public_html/php/wikidata.php`
+  uses `curl_multi` to fetch Wikibase items via the API.
+- PHP's curl extension sends no User-Agent header by default. The php.ini
+  `user_agent` setting is ignored by the curl extension — it only affects
+  stream-based functions like `file_get_contents()`.
+- Anubis (the bot protection layer in front of Apache) blocks requests with
+  no User-Agent, returning an HTML challenge page instead of JSON.
+- `loadItems()` receives HTML, `json_decode()` returns null, `hasItem()` returns
+  false, and `bot.php` reports "Item Qxxx is not available" on every command.
+
+The fix is to patch `wikidata.php` at build time using `sed` to add
+`CURLOPT_USERAGENT` to each curl handle inside `getMultipleURLsInParallel()`.
+
+---
+
 ## Schema compatibility fixes
 
 The upstream `schema.sql` contains two issues incompatible with MariaDB 11+:
@@ -121,6 +143,19 @@ RUN echo "* * * * * www-data /usr/local/bin/php \
 ```
 
 Wrapper entrypoint starts cron before handing off to the upstream Apache entrypoint.
+
+### Fix 4 — Patch magnustools to send a User-Agent in curl_multi requests
+
+```dockerfile
+RUN sed -i \
+  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (WikiTrek self-hosted bot)'"'"');|' \
+  /var/www/html/magnustools/public_html/php/wikidata.php
+```
+
+This inserts `CURLOPT_USERAGENT` immediately after `CURLOPT_SSL_VERIFYHOST` —
+the only place where curl handle options are set for each URL in the batch.
+The patch applies to the image at build time; no upstream files are modified
+in the repo.
 
 ---
 
@@ -188,20 +223,21 @@ fetch item data during batch processing.
 
 Two potential blockers to be aware of:
 
-1. **Bot filtering:** If your Wikibase host runs a bot protection layer (such as
-   Anubis), add an allow rule for the IP address of the QuickStatements host.
-   Batch processing sends requests with a non-browser User-Agent that bot filters
-   may block.
-
-2. **IPv4/IPv6 mismatch:** Docker containers have IPv4 only by default. If the
+1. **IPv4/IPv6 mismatch:** Docker containers have IPv4 only by default. If the
    Wikibase host blocks or does not respond to IPv4 connections from the
    QuickStatements host (e.g. due to firewall rules that only permit IPv6 for
    that source), batch item fetches will fail with "Item Qxxx is not available".
    Verify that the QuickStatements host can reach the Wikibase API over IPv4
    before troubleshooting elsewhere.
 
-These issues resolve automatically when both services run on the same host —
-the item fetch becomes a local call through the Docker bridge.
+2. **Bot filtering (User-Agent):** Even when both services run on the same host,
+   if your Wikibase instance is protected by a bot filter such as Anubis, the
+   filter will block `curl_multi` requests that carry no User-Agent header.
+   Fix 4 above addresses this by patching `wikidata.php` at build time.
+   Do not rely on the php.ini `user_agent` setting — the curl extension ignores it.
+
+These issues resolve automatically when both services run on the same host,
+provided Fix 4 is applied to handle the Anubis User-Agent requirement.
 
 ---
 
@@ -209,7 +245,7 @@ the item fetch becomes a local call through the Docker bridge.
 
 | File | Change |
 |---|---|
-| `Dockerfile.quickstatements` | New — custom image build |
+| `Dockerfile.quickstatements` | New — adds `mysqli`, cron runner, credentials entrypoint, User-Agent patch |
 | `config/quickstatements-entrypoint.sh` | New — wrapper entrypoint |
 | `config/quickstatements-replica.my.cnf` | New — DB credentials template |
 | `docker-compose.yml` | `image:` → `build:`, `extra_hosts`, new volumes, new env vars, pinned subnet |
@@ -223,6 +259,9 @@ the item fetch becomes a local call through the Docker bridge.
 - Batch list loads correctly and batches are tracked in the database.
 - Batch execution works correctly when QuickStatements and Wikibase run on the
   same host.
+- Batch processing works correctly behind Anubis bot protection — the patched
+  `wikidata.php` sends a `QuickStatements/1.0 (WikiTrek self-hosted bot)`
+  User-Agent on all curl_multi API requests.
 - The custom image must be rebuilt (`docker compose build quickstatements`) when
   the upstream image is updated.
 - Credentials are injected at startup via `envsubst` — never stored in the image.

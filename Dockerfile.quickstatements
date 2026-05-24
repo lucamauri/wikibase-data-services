@@ -7,7 +7,7 @@
 # WHY THIS DOCKERFILE EXISTS
 # --------------------------
 # The upstream image is designed for Wikimedia Toolforge infrastructure.
-# Three things are missing or incompatible with a standalone deployment:
+# Four things are missing or incompatible with a standalone deployment:
 #
 #   1. The `mysqli` PHP extension is not compiled into the upstream image.
 #      QuickStatements uses the `magnustools` library (ToolforgeCommon) for
@@ -23,7 +23,13 @@
 #      INIT status forever — the progress bar never moves.
 #      Fix: run bot.php every minute via cron inside the container.
 #
-#   3. The database credentials file (replica.my.cnf) does not exist in the
+#   3. The magnustools curl_multi code sends no User-Agent header, which
+#      causes Anubis (the bot protection layer) to block API requests with
+#      an HTML challenge page instead of JSON. This makes loadItems() fail
+#      silently and bot.php report "Item Qxxx is not available".
+#      Fix: patch wikidata.php at build time to add CURLOPT_USERAGENT.
+#
+#   4. The database credentials file (replica.my.cnf) does not exist in the
 #      container by default, and the upstream entrypoint does not create it.
 #      Fix: a wrapper entrypoint substitutes credentials from environment
 #      variables at startup and writes the file to the expected path.
@@ -82,7 +88,28 @@ RUN echo "* * * * * www-data /usr/local/bin/php \
     && chmod 0644 /etc/cron.d/quickstatements-bot
 
 # -----------------------------------------------------------------------------
-# Fix 3 — Wrapper entrypoint for credential injection
+# Fix 3 — Patch magnustools to send a User-Agent in curl_multi requests
+# -----------------------------------------------------------------------------
+# getMultipleURLsInParallel() in wikidata.php uses curl_multi to fetch Wikibase
+# items. It sets CURLOPT_RETURNTRANSFER and SSL options but never sets a
+# User-Agent header. PHP's curl extension ignores the php.ini user_agent
+# setting — it sends no User-Agent by default.
+#
+# Anubis (the bot protection layer in front of Apache/MediaWiki) blocks
+# requests with no User-Agent, returning an HTML challenge page instead of
+# JSON. This causes loadItems() to silently fail and bot.php to report
+# "Item Qxxx is not available" on every batch command.
+#
+# The sed command inserts CURLOPT_USERAGENT immediately after the existing
+# CURLOPT_SSL_VERIFYHOST line — the only place where curl handle options
+# are set for each URL in the batch.
+# -----------------------------------------------------------------------------
+RUN sed -i \
+  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (WikiTrek self-hosted bot)'"'"');|' \
+  /var/www/html/magnustools/public_html/php/wikidata.php
+
+# -----------------------------------------------------------------------------
+# Fix 4 — Wrapper entrypoint for credential injection
 # -----------------------------------------------------------------------------
 # The upstream entrypoint starts Apache directly. Our wrapper runs first and:
 #   1. Creates /data/project/nobody/ (the Toolforge-convention path where
