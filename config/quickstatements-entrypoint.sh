@@ -8,6 +8,13 @@
 
 set -e
 
+# Derive lowercase site identifier from SITENAME.
+# QuickStatements stores site names in lowercase (strtolower) in the database.
+# QS_SITE_ID must match that so config.json keys align with the batch table,
+# preventing a silent JS crash on the batch detail page when
+# config.sites[site] is undefined in the browser.
+export QS_SITE_ID="${SITENAME,,}"
+
 # Create the target directory if it doesn't exist
 mkdir -p /data/project/nobody
 mkdir -p /var/log/quickstatements

@@ -1,12 +1,12 @@
 {
-  "site": "${SITENAME}",
+  "site": "${QS_SITE_ID}",
   "bot_config_file": "/var/www/html/bot.ini",
   "logfile": "/var/log/quickstatements/tool.log",
   "sites": {
-    "${SITENAME}": {
+    "${QS_SITE_ID}": {
       "oauth": {
         "language": "${LANGUAGE_CODE}",
-        "project": "${SITENAME}",
+        "project": "${QS_SITE_ID}",
         "ini_file": "/quickstatements/data/oauth.ini",
         "publicMwOAuthUrl": "${OAUTH_SCRIPT_PATH}/index.php?title=Special:OAuth",
         "mwOAuthUrl": "${OAUTH_SCRIPT_PATH}/index.php?title=Special:OAuth",
@@ -15,7 +15,7 @@
       "server": "${WIKIBASE_SCHEME}://${WIKIBASE_HOST}",
       "api": "${WIKIBASE_SCHEME}://${WIKIBASE_HOST}${WIKIBASE_API_PATH}",
       "pageBase": "${WIKIBASE_SCHEME}://${WIKIBASE_HOST}/wiki/",
-      "entityBase": "${WIKIBASE_SCHEME}://${WIKIBASE_HOST}/entity/" ,
+      "entityBase": "${WIKIBASE_SCHEME}://${WIKIBASE_HOST}/entity/",
       "toolBase": "${QUICKSTATEMENTS_PUBLIC_URL}/",
       "types": {
         "P": {

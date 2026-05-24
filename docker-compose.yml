@@ -226,7 +226,8 @@ services:
       OAUTH_CONSUMER_KEY: ${OAUTH_CONSUMER_KEY}
       OAUTH_CONSUMER_SECRET: ${OAUTH_CONSUMER_SECRET}
       OAUTH_SCRIPT_PATH: ${OAUTH_SCRIPT_PATH}
-      # Site name (maps WIKIBASE_NAME to SITENAME used in config templates)
+      # Site name for display purposes (used in oauth.ini agent string).
+      # Maps WIKIBASE_NAME to SITENAME as expected by the config templates.
       SITENAME: ${WIKIBASE_NAME}
       # Batch database credentials (substituted into replica.my.cnf)
       QS_DB_USER: ${QS_DB_USER}
