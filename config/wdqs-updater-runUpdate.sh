@@ -52,21 +52,35 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 # Validate required environment variables
 # -----------------------------------------------------------------------------
-# WIKIBASE_CONCEPT_URI and UPDATER_DELAY are validated explicitly because:
-#   - A missing or malformed WIKIBASE_CONCEPT_URI causes the Munger to throw
-#     BadSubjectException on every entity update — Blazegraph gets no data.
-#   - A missing UPDATER_DELAY would fall through to the --pollDelay argument
-#     as an empty string, causing the Java process to fail with an unhelpful
-#     argument parsing error.
+# Only WIKIBASE_CONCEPT_URI and UPDATER_DELAY are validated explicitly here.
+# The reasons differ for each:
 #
-# WDQS_HOST and WDQS_PORT are NOT validated here — they are set by the
-# upstream image entrypoint with safe defaults and are always present.
+#   WIKIBASE_CONCEPT_URI — validated because its failure mode is silent and
+#      catastrophic: a missing or malformed value causes the Munger to throw
+#      BadSubjectException on every entity update, Blazegraph receives no data,
+#      and the updater logs fill with errors that look unrelated to the root
+#      cause. This variable is intentionally absent from .env (it is assembled
+#      in docker-compose.yml) — so an operator who forgets to configure
+#      docker-compose.yml correctly would otherwise get no useful error message.
+#
+#   UPDATER_DELAY — validated because a missing value would be passed as an
+#      empty string to the --pollDelay argument, causing the Java process to
+#      fail immediately with an unhelpful argument parsing error.
+#
+#   WIKIBASE_HOST, WIKIBASE_SCHEME, WIKIBASE_API_PATH — not validated here
+#      because they expand directly into the exec arguments below. If any are
+#      missing, -u (unset variable as error) will catch them at that point and
+#      exit with a clear "unbound variable" message naming the exact variable.
+#
+#   WDQS_HOST, WDQS_PORT — not validated here because they are set by the
+#      upstream image entrypoint with safe defaults and are always present
+#      when this script runs.
 # -----------------------------------------------------------------------------
 if [ -z "${WIKIBASE_CONCEPT_URI:-}" ]; then
   echo "ERROR: WIKIBASE_CONCEPT_URI is required but is not set."
   echo "       It should be assembled in docker-compose.yml as:"
   echo "       \${WIKIBASE_SCHEME}://\${WIKIBASE_HOST}/"
-  echo "       Do NOT set it in .env — see docs/adr-concept-uri-assembly.md"
+  echo "       Do NOT set it in .env — see docs/decisions/005-concept-uri-assembly.md"
   exit 1
 fi
 
@@ -113,7 +127,8 @@ cd /wdqs || exit 1
 #   --entityNamespaces
 #       Comma-separated MediaWiki namespace IDs for entity types.
 #       Standard self-hosted Wikibase: 120 (Item), 122 (Property).
-#       Do NOT use 146 — that is Wikidata-specific.
+#       WARNING: 146 is Wikidata-specific — do NOT use it for a self-hosted
+#       instance. It will cause the updater to miss all entity changes.
 #
 #   --apiPath
 #       Path to api.php on the Wikibase host (e.g. /w/api.php).
