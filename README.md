@@ -5,7 +5,7 @@ A Docker Compose stack providing auxiliary data services for an existing
 
 This project is designed for deployments where MediaWiki, Wikibase, and
 MariaDB run directly on the host — **not** in Docker. It provides only the
-services that benefit from containerisation:
+services that have no LAMP equivalent and benefit from containerisation:
 
 | Service | Purpose |
 |---|---|
@@ -55,7 +55,7 @@ docker compose up -d
 docker compose ps
 ```
 
-`template.env` contains a description of every variable. The minimum
+`template.env` contains a full description of every variable. The minimum
 required variables are:
 
 ```env
@@ -73,9 +73,9 @@ WIKIBASE_EXAMPLES_PAGE=Help:SPARQL_query_examples
 
 > **Note:** `WIKIBASE_CONCEPT_URI` is intentionally absent from `template.env`
 > and must not be set manually. It is assembled automatically in
-> `docker-compose.yml`. Setting it — especially with a `/entity/` suffix —
-> causes `BadSubjectException` in the WDQS updater and silently breaks
-> Blazegraph synchronisation. See
+> `docker-compose.yml` from `WIKIBASE_SCHEME` and `WIKIBASE_HOST`. Setting it
+> manually — especially with a `/entity/` suffix — causes `BadSubjectException`
+> in the WDQS updater and silently breaks Blazegraph synchronisation. See
 > [docs/decisions/005-concept-uri-assembly.md](docs/decisions/005-concept-uri-assembly.md)
 > for the full explanation.
 
@@ -87,16 +87,17 @@ Traefik listens on `127.0.0.1:8880` by default. Your host reverse proxy
 must forward requests for `WDQS_FRONTEND_PUBLIC_HOST` and
 `QUICKSTATEMENTS_PUBLIC_HOST` to that port, preserving the `Host` header.
 
-Example Apache VirtualHost configurations are in
-[docs/examples/apache/](docs/examples/apache/).
+Example Apache VirtualHost configurations are provided in
+[docs/examples/apache/](docs/examples/apache/). Copy the relevant file,
+replace the placeholder values, and enable the site.
 
-Critical rules that are easy to get wrong:
+Four rules that are easy to get wrong:
 
 - `X-Real-IP` header must use a **capital P** — `X-Real-Ip` (lowercase)
   causes Anubis to fail silently with 15–30 second page loads for all users
 - The internal `:8080` VirtualHost must bind to `[::1]:8080`, not `*:8080`
 - `ServerName` is required on the `:8080` VirtualHost
-- `ProxyPreserveHost On` is required so Traefik can route correctly
+- `ProxyPreserveHost On` is required so Traefik can route to the correct container
 
 ---
 
@@ -112,23 +113,23 @@ The traffic chain with Anubis:
 Internet → Apache :443 (TLS) → Anubis :[::1]:8923 → Apache :[::1]:8080 → Traefik :8880 → container
 ```
 
-Without Anubis, Apache proxies directly from `:443` to `:8080`. The
-Apache VirtualHost examples in [docs/examples/apache/](docs/examples/apache/)
-show both configurations.
+Without Anubis, Apache proxies directly from `:443` to the internal `:8080`
+backend. The Apache VirtualHost examples in
+[docs/examples/apache/](docs/examples/apache/) show both configurations.
 
 ---
 
 ## Data loading
 
-On first deployment, Blazegraph starts empty. The WDQS updater only
-processes changes that happen after it starts — it will not back-fill
-your existing Wikibase data.
+On first deployment, Blazegraph starts empty. The WDQS updater only processes
+changes that happen after it starts — it will not back-fill your existing
+Wikibase data.
 
 You must perform an initial load from a Wikibase RDF dump before starting
 the full stack. See [docs/data-loading.md](docs/data-loading.md) for the
 step-by-step procedure.
 
-If you are migrating from an existing server, see
+If you are migrating an existing deployment to a new server, see
 [docs/data-migration.md](docs/data-migration.md) instead.
 
 ---
@@ -136,7 +137,8 @@ If you are migrating from an existing server, see
 ## QuickStatements OAuth
 
 QuickStatements requires an OAuth 1.0a consumer registered on your Wikibase
-before users can log in. This is a one-time setup step.
+before users can log in. This is a one-time setup step performed by a wiki
+administrator.
 
 See [docs/quickstatements-oauth-setup.md](docs/quickstatements-oauth-setup.md)
 for the step-by-step registration and approval walkthrough.
@@ -145,8 +147,8 @@ for the step-by-step registration and approval walkthrough.
 
 ## Elasticsearch and CirrusSearch
 
-After starting the stack, connect MediaWiki to Elasticsearch by adding
-to `LocalSettings.php`:
+After starting the stack, connect MediaWiki to Elasticsearch by adding to
+`LocalSettings.php`:
 
 ```php
 wfLoadExtension( 'CirrusSearch' );
@@ -162,8 +164,8 @@ php maintenance/run.php updateSearchIndexConfig
 php maintenance/run.php forceSearchIndex
 ```
 
-See [docs/elasticsearch-setup.md](docs/elasticsearch-setup.md) for the
-full setup guide, re-indexing instructions, and memory tuning.
+See [docs/elasticsearch-setup.md](docs/elasticsearch-setup.md) for the full
+setup guide, re-indexing instructions, and memory tuning.
 
 ---
 
@@ -171,14 +173,15 @@ full setup guide, re-indexing instructions, and memory tuning.
 
 ### `BadSubjectException` in WDQS updater logs
 
-The updater logs are full of `BadSubjectException` errors and Blazegraph
-has no data or stops updating.
+Blazegraph has no data, or the updater logs are full of `BadSubjectException`
+errors and synchronisation has stopped.
 
-**Cause:** `WIKIBASE_CONCEPT_URI` is set incorrectly — most commonly with
-a `/entity/` suffix copied from Wikidata examples.
+**Cause:** `WIKIBASE_CONCEPT_URI` is set incorrectly — most commonly with a
+`/entity/` suffix copied from Wikidata examples, or set manually in `.env`
+at all.
 
-**Fix:** Remove `WIKIBASE_CONCEPT_URI` from `.env` entirely. It is
-assembled automatically in `docker-compose.yml`. See
+**Fix:** Remove `WIKIBASE_CONCEPT_URI` from `.env` entirely. It is assembled
+automatically in `docker-compose.yml`. See
 [docs/decisions/005-concept-uri-assembly.md](docs/decisions/005-concept-uri-assembly.md).
 
 ---
@@ -187,9 +190,9 @@ assembled automatically in `docker-compose.yml`. See
 
 The SPARQL query UI loads but queries return a 421 error.
 
-**Cause:** The nginx config in `wdqs-frontend` is not sending a `Host`
-header when proxying to your Wikibase. Apache on the upstream returns 421
-when it cannot match a VirtualHost by hostname.
+**Cause:** The nginx config in `wdqs-frontend` is not sending a `Host` header
+when proxying to your Wikibase. Apache on the upstream returns 421 when it
+cannot match a VirtualHost by hostname.
 
 **Fix:** Verify that `config/wdqs-frontend-default.conf` contains
 `proxy_set_header Host $WIKIBASE_HOST;` in the `/proxy/wikibase` location
@@ -201,14 +204,15 @@ docker exec wikibase-data-services-wdqs-frontend-1 cat /etc/nginx/conf.d/default
 
 ---
 
-### WDQS frontend shows no data / wrong prefixes
+### WDQS frontend shows no data or wrong entity URI prefixes
 
-Queries return no results even after a successful data load, or entity
-URIs use the wrong prefix.
+Queries return no results even after a successful data load, or entity URIs
+use the wrong prefix.
 
-**Cause:** The `wdqs-frontend` image `:2` uses different volume mount
-paths than `:1`. Mounting config files to the wrong paths causes silent
-misconfiguration — the container starts normally but uses default values.
+**Cause:** The `wdqs-frontend` image `:2` uses different volume mount paths
+than `:1`. Mounting config files to the wrong paths causes silent
+misconfiguration — the container starts normally but uses its built-in
+defaults instead of your customised files.
 
 **Fix:** Verify the volume mounts in `docker-compose.yml` use the correct
 paths for image `:2`:
@@ -229,12 +233,37 @@ never progress.
 `mysqli` PHP extension and has no batch runner process. This stack fixes
 both via `Dockerfile.quickstatements`.
 
-**Fix:** Ensure the container is built from the local Dockerfile, not
-pulled from the upstream image:
+**Fix:** Ensure the container is built from the local Dockerfile, not pulled
+directly from the upstream image:
 
 ```bash
 docker compose build quickstatements
 docker compose up -d quickstatements
+```
+
+See [docs/decisions/006-quickstatements-batch-fix.md](docs/decisions/006-quickstatements-batch-fix.md)
+for the full explanation of all four issues and their fixes.
+
+---
+
+### Batch detail page is blank even though the batch was created
+
+The batch list shows your batch, but clicking it shows a blank page. No
+commands are displayed and the progress bar never appears.
+
+**Cause:** A site name case mismatch between the value stored in the batch
+database and the value QuickStatements uses to look up its configuration.
+`api.php` lowercases the site name via `strtolower()` when writing to the
+database, but if `config.json` uses the mixed-case display name as the site
+key, the lookup silently fails.
+
+**Fix:** Verify that the `"site"` key and `"sites"` object key in the
+generated `config.json` inside the container are lowercase:
+
+```bash
+docker exec wikibase-data-services-quickstatements-1 \
+  cat /var/www/html/quickstatements/public_html/config.json \
+  | python3 -m json.tool | head -6
 ```
 
 See [docs/decisions/006-quickstatements-batch-fix.md](docs/decisions/006-quickstatements-batch-fix.md)
@@ -258,9 +287,12 @@ Key design decisions are documented in [docs/decisions/](docs/decisions/):
 
 ## Real-world usage
 
-This stack is the primary deployment for
-[WikiTrek](https://wikitrek.org) — an Italian Star Trek wiki running
-MediaWiki 1.43 with Wikibase and Semantic MediaWiki.
+This stack is general-purpose and not tied to any specific Wikibase
+installation. As a concrete example of what a production deployment looks
+like, it powers [WikiTrek](https://wikitrek.org) — an Italian Star Trek wiki
+running MediaWiki 1.43 with Wikibase and Semantic MediaWiki on a Hetzner
+CX33 instance (4 vCPU, 8 GB RAM, Ubuntu 26.04). All six containers run
+healthily alongside the host LAMP stack within the available RAM budget.
 
 ---
 
@@ -273,11 +305,11 @@ All images are from the official
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report issues, open
-pull requests, and format commit messages.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report issues, open pull
+requests, and format commit messages.
 
 ---
 
 ## License
 
-[GNU General Public License v2.0](LICENSE.md)
+[GNU General Public License v2.0](LICENSE)
