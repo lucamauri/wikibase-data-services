@@ -134,13 +134,20 @@ If you are migrating an existing deployment to a new server, see
 
 ---
 
-## QuickStatements OAuth
+## QuickStatements setup
 
-QuickStatements requires an OAuth 1.0a consumer registered on your Wikibase
-before users can log in. This is a one-time setup step performed by a wiki
-administrator.
+QuickStatements requires two one-time setup steps before first use:
 
-See [docs/quickstatements-oauth-setup.md](docs/quickstatements-oauth-setup.md)
+**1. Database setup** — Two MariaDB databases must be created on the host
+and initialised with a MariaDB 11+ compatible schema before starting the
+container. See [docs/quickstatements-database-setup.md](docs/quickstatements-database-setup.md)
+for the full procedure including bind address configuration, firewall rules,
+and schema initialisation.
+
+**2. OAuth registration** — QuickStatements authenticates users via OAuth 1.0a
+against your Wikibase instance. An OAuth consumer must be registered on your
+wiki by a wiki administrator before users can log in. See
+[docs/quickstatements-oauth-setup.md](docs/quickstatements-oauth-setup.md)
 for the step-by-step registration and approval walkthrough.
 
 ---

@@ -113,6 +113,10 @@ start. `ToolforgeCommon` derives a second DB name from the first by replacing
 `_p` with `_auth` (`qsbot__quickstatements_p` → `qsbot__quickstatements_auth`).
 Both databases need identical schemas.
 
+See [docs/quickstatements-database-setup.md](../quickstatements-database-setup.md)
+for the full step-by-step procedure including MariaDB bind address configuration,
+firewall rules, database creation, and schema initialisation.
+
 ---
 
 ## Solution
@@ -167,43 +171,15 @@ site-specific customisation.
 
 ## Host-side infrastructure requirements
 
-### MariaDB — bind address
+See [docs/quickstatements-database-setup.md](../quickstatements-database-setup.md)
+for the complete host-side setup procedure. The requirements in summary:
 
-MariaDB on the host must listen on the Docker bridge gateway (`172.18.0.1`) in
-addition to `127.0.0.1`. Add to your MariaDB configuration:
-
-```ini
-[mysqld]
-bind-address        = 127.0.0.1,172.18.0.1
-skip-name-resolve
-```
-
-`skip-name-resolve` prevents DNS-based authentication mismatches when the
-connecting IP resolves to an unexpected hostname.
-
-### MariaDB — databases and user
-
-```sql
-CREATE DATABASE `qsbot__quickstatements_p`    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE DATABASE `qsbot__quickstatements_auth`  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'qsbot'@'172.18.0.%' IDENTIFIED BY 'your_password';
-CREATE USER 'qsbot'@'localhost'   IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON `qsbot__quickstatements_p`.*    TO 'qsbot'@'172.18.0.%';
-GRANT ALL PRIVILEGES ON `qsbot__quickstatements_auth`.* TO 'qsbot'@'172.18.0.%';
-GRANT ALL PRIVILEGES ON `qsbot__quickstatements_p`.*    TO 'qsbot'@'localhost';
-```
-
-### Firewall
-
-Allow the Docker bridge network to reach host MariaDB. Example for UFW:
-
-```
-# /etc/ufw/before.rules
--A ufw-before-input -s 172.18.0.0/16 -p tcp --dport 3306 -j ACCEPT
-```
-
-Using the subnet (`172.18.0.0/16`) rather than the bridge interface name
-ensures the rule survives interface renames after stack recreation.
+- MariaDB must listen on both `127.0.0.1` and `172.18.0.1` (Docker bridge gateway)
+- UFW must allow `172.18.0.0/16` → port 3306
+- Two databases must exist: `qsbot__quickstatements_p` and `qsbot__quickstatements_auth`
+- Both databases must have the corrected schema applied (MariaDB 11+ compatible)
+- A MariaDB user must have `GRANT ALL` on both databases from the `172.18.0.%` host pattern
+- Docker Compose network must be pinned to subnet `172.18.0.0/16`
 
 ### docker-compose.yml — pinned subnet
 
@@ -253,6 +229,7 @@ Two potential blockers to be aware of:
 | `config/quickstatements-replica.my.cnf` | New — DB credentials template |
 | `docker-compose.yml` | `image:` → `build:`, `extra_hosts`, new volumes, new env vars, pinned subnet |
 | `.env` / `template.env` | Added `QS_DB_USER`, `QS_DB_PASSWORD` |
+| `docs/quickstatements-database-setup.md` | New — host-side database setup guide |
 | `docs/decisions/006-quickstatements-batch-fix.md` | This file |
 
 ---
