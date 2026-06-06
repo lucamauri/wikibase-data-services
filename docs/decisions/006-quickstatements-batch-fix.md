@@ -5,7 +5,7 @@
 
 ## Context
 
-After deploying `wikibase/quickstatements:1`, five issues were observed:
+After deploying `wikibase/quickstatements:1`, four issues were observed:
 
 1. Interactive ("Run") imports worked correctly.
 2. Batch mode ("Run in background") showed a progress bar stuck at 0% indefinitely.
@@ -13,20 +13,15 @@ After deploying `wikibase/quickstatements:1`, five issues were observed:
    calls to `api.php?action=get_batches_info` every 5 seconds with no response.
 4. After fixes 1–3, batches progressed but every command failed with
    "Item Qxxx is not available" even though the Wikibase API was reachable.
-5. After fixes 1–4, batch execution worked but the batch detail page
-   (`/#/batch/N`) was blank — commands were stored in the database but never
-   displayed in the browser.
 
-HAR analysis of the failing requests for issues 1–4 revealed a PHP fatal error
-returned as HTTP 200:
+HAR analysis of the failing requests revealed a PHP fatal error returned as HTTP 200:
 
 ```
 Fatal error: Uncaught Error: Class "mysqli" not found
 in ToolforgeCommon.php:212
 ```
 
-Deeper investigation revealed five compounding problems in the upstream image
-and configuration.
+Deeper investigation revealed four compounding problems in the upstream image.
 
 ---
 
@@ -83,8 +78,8 @@ cron inside the container.
 
 ## Problem 4 — magnustools curl_multi sends no User-Agent header
 
-After DataTrek migrated to `unitedwikitrek` (same host as QuickStatements),
-batches still failed with "Item Qxxx is not available". Investigation showed:
+Batches can fail with "Item Qxxx is not available" even though the Wikibase API
+is reachable. Investigation shows:
 
 - `getMultipleURLsInParallel()` in `magnustools/public_html/php/wikidata.php`
   uses `curl_multi` to fetch Wikibase items via the API.
@@ -99,41 +94,8 @@ batches still failed with "Item Qxxx is not available". Investigation showed:
 The fix is to patch `wikidata.php` at build time using `sed` to add
 `CURLOPT_USERAGENT` to each curl handle inside `getMultipleURLsInParallel()`.
 
----
-
-## Problem 5 — Site name case mismatch causes blank batch detail page
-
-After all four fixes above, batch execution worked correctly but navigating to
-a batch detail page (`/#/batch/N`) showed a blank page with no commands listed,
-even though the commands were present in the database.
-
-HAR analysis showed that `api.php?action=get_commands_from_batch` was never
-called by the browser. The call sequence stopped after `get_batch_info`.
-
-Root cause: a case mismatch between the site identifier stored in the database
-and the key used in `config.json`.
-
-The QuickStatements `api.php` lowercases the site name with `strtolower()` before
-writing it to the `batch` table:
-
-```php
-$site = strtolower ( trim ( get_request ( 'site' , '' ) ) ) ;
-```
-
-So batches are stored with `site=wikitrek` (lowercase). However, `config.json`
-was generated from a template where `${SITENAME}` expanded to `WikiTrek`
-(preserving the case of `WIKIBASE_NAME` in `.env`). The result was a `config.json`
-with `"sites": {"WikiTrek": {...}}`.
-
-In the browser, when the Vue batch detail component tried to look up
-`config.sites[meta.batch.site]`, it evaluated `config.sites["wikitrek"]` —
-which is `undefined` because the key is `"WikiTrek"`. JavaScript threw a silent
-`TypeError` (cannot read property of undefined), Vue caught it internally, and
-the `batch-commands` component never mounted. No API call was made; no error
-was shown.
-
-The fix requires the site identifier in `config.json` to be lowercase, matching
-what `api.php` stores in the database.
+This problem only manifests when the Wikibase API is protected by a User-Agent
+filter such as Anubis. Deployments without such a filter are unaffected.
 
 ---
 
@@ -147,10 +109,9 @@ The upstream `schema.sql` contains two issues incompatible with MariaDB 11+:
    rejected in strict mode. Fixed: `DEFAULT 0`.
 
 The corrected schema must be applied manually to both QS databases before first
-start. The `_auth` database: `ToolforgeCommon` derives a second DB name from the
-first by replacing `_p` with `_auth`
-(`qsbot__quickstatements_p` → `qsbot__quickstatements_auth`). Both databases need
-identical schemas.
+start. `ToolforgeCommon` derives a second DB name from the first by replacing
+`_p` with `_auth` (`qsbot__quickstatements_p` → `qsbot__quickstatements_auth`).
+Both databases need identical schemas.
 
 ---
 
@@ -189,7 +150,7 @@ Wrapper entrypoint starts cron before handing off to the upstream Apache entrypo
 
 ```dockerfile
 RUN sed -i \
-  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (WikiTrek self-hosted bot)'"'"');|' \
+  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (self-hosted bot)'"'"');|' \
   /var/www/html/magnustools/public_html/php/wikidata.php
 ```
 
@@ -198,38 +159,9 @@ the only place where curl handle options are set for each URL in the batch.
 The patch applies to the image at build time; no upstream files are modified
 in the repo.
 
-### Fix 5 — Lowercase site identifier for config.json
-
-The site identifier used as a key in `config.json` must be lowercase to match
-what `api.php` stores in the database via `strtolower()`.
-
-`WIKIBASE_NAME` in `.env` carries the display name (`WikiTrek`) and must not be
-changed — it is used in the OAuth agent string and WDQS frontend branding. A
-separate lowercase identifier is derived at container startup instead.
-
-`config/quickstatements-entrypoint.sh` derives `QS_SITE_ID` from `SITENAME`
-using bash parameter expansion before the upstream entrypoint runs `envsubst`:
-
-```bash
-export QS_SITE_ID="${SITENAME,,}"
-```
-
-`config/quickstatements-config.json` uses `${QS_SITE_ID}` for all three
-identifier fields (`"site"`, the sites object key, and `"project"`), while
-`config/quickstatements-oauth.ini` continues to use `${SITENAME}` for the
-human-readable `agent` string.
-
-The upstream `/entrypoint.sh` runs `envsubst` on the config template with the
-full environment, so `QS_SITE_ID` is available without any further changes.
-
-**Why not just lowercase `WIKIBASE_NAME` in `.env`?** That would break the
-OAuth agent string (`WikiTrek Docker QuickStatements` would become
-`wikitrek docker quickstatements`) and the WDQS frontend title. The two
-concerns — display name and database identifier — must be kept separate.
-
-**Why not a new `.env` variable?** Adding `QS_SITENAME=wikitrek` to `.env`
-would require operators to keep it in sync with `WIKIBASE_NAME` manually.
-Deriving it automatically in the entrypoint eliminates that risk entirely.
+The User-Agent string `QuickStatements/1.0 (self-hosted bot)` is intentionally
+generic — it accurately identifies any deployment of this stack without requiring
+site-specific customisation.
 
 ---
 
@@ -310,9 +242,6 @@ Two potential blockers to be aware of:
    Fix 4 above addresses this by patching `wikidata.php` at build time.
    Do not rely on the php.ini `user_agent` setting — the curl extension ignores it.
 
-These issues resolve automatically when both services run on the same host,
-provided Fix 4 is applied to handle the Anubis User-Agent requirement.
-
 ---
 
 ## Files changed
@@ -320,10 +249,9 @@ provided Fix 4 is applied to handle the Anubis User-Agent requirement.
 | File | Change |
 |---|---|
 | `Dockerfile.quickstatements` | New — adds `mysqli`, cron runner, credentials entrypoint, User-Agent patch |
-| `config/quickstatements-entrypoint.sh` | New — wrapper entrypoint; derives `QS_SITE_ID` from `SITENAME` |
+| `config/quickstatements-entrypoint.sh` | New — wrapper entrypoint |
 | `config/quickstatements-replica.my.cnf` | New — DB credentials template |
-| `config/quickstatements-config.json` | Updated — `${SITENAME}` → `${QS_SITE_ID}` for all identifier fields |
-| `docker-compose.yml` | `image:` → `build:`, `extra_hosts`, new volumes, env vars, pinned subnet |
+| `docker-compose.yml` | `image:` → `build:`, `extra_hosts`, new volumes, new env vars, pinned subnet |
 | `.env` / `template.env` | Added `QS_DB_USER`, `QS_DB_PASSWORD` |
 | `docs/decisions/006-quickstatements-batch-fix.md` | This file |
 
@@ -334,11 +262,9 @@ provided Fix 4 is applied to handle the Anubis User-Agent requirement.
 - Batch list loads correctly and batches are tracked in the database.
 - Batch execution works correctly when QuickStatements and Wikibase run on the
   same host.
-- Batch detail pages load correctly — commands are displayed with their status,
-  message, and timestamp.
 - Batch processing works correctly behind Anubis bot protection — the patched
-  `wikidata.php` sends a `QuickStatements/1.0 (WikiTrek self-hosted bot)`
-  User-Agent on all curl_multi API requests.
+  `wikidata.php` sends a `QuickStatements/1.0 (self-hosted bot)` User-Agent
+  on all curl_multi API requests.
 - The custom image must be rebuilt (`docker compose build quickstatements`) when
   the upstream image is updated.
 - Credentials are injected at startup via `envsubst` — never stored in the image.

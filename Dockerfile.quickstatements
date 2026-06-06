@@ -19,8 +19,8 @@
 #
 #   2. There is no batch runner process. On Wikimedia Toolforge, batches are
 #      executed by the `jsub` job scheduler, which does not exist here.
-#      Without a runner, batches are created in the database but stay in
-#      INIT status forever — the progress bar never moves.
+#      Without it, batches are created in the database but stay in INIT
+#      status forever — the progress bar never moves.
 #      Fix: run bot.php every minute via cron inside the container.
 #
 #   3. The magnustools curl_multi code sends no User-Agent header, which
@@ -35,7 +35,7 @@
 #      variables at startup and writes the file to the expected path.
 #
 # Full details and host-side setup steps:
-#   docs/adr-quickstatements-batch-fix.md
+#   docs/decisions/006-quickstatements-batch-fix.md
 #
 # BASE IMAGE
 # ----------
@@ -103,9 +103,13 @@ RUN echo "* * * * * www-data /usr/local/bin/php \
 # The sed command inserts CURLOPT_USERAGENT immediately after the existing
 # CURLOPT_SSL_VERIFYHOST line — the only place where curl handle options
 # are set for each URL in the batch.
+#
+# The User-Agent string "QuickStatements/1.0 (self-hosted bot)" is intentionally
+# generic — it accurately identifies any deployment of this stack without
+# requiring site-specific customisation.
 # -----------------------------------------------------------------------------
 RUN sed -i \
-  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (WikiTrek self-hosted bot)'"'"');|' \
+  's|curl_setopt(\$ch\[$key\], CURLOPT_SSL_VERIFYHOST, false);|curl_setopt($ch[$key], CURLOPT_SSL_VERIFYHOST, false);\n                                curl_setopt($ch[$key], CURLOPT_USERAGENT, '"'"'QuickStatements/1.0 (self-hosted bot)'"'"');|' \
   /var/www/html/magnustools/public_html/php/wikidata.php
 
 # -----------------------------------------------------------------------------
