@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikibase Data Services</title>
+    <meta name="description"
+        content="A Docker Compose stack providing SPARQL querying, full-text search, and batch editing for self-hosted Wikibase installations on a native LAMP stack.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --bg-subtle: #1c2330;
+            --border: #2d3748;
+            --border-hi: #3d4f6b;
+            --text: #e6edf3;
+            --muted: #7d8590;
+            --accent: #58a6ff;
+            --accent-dim: #1f3a5f;
+            --green: #3fb950;
+            --green-dim: #1a3625;
+            --amber: #d29922;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'IBM Plex Sans', sans-serif;
+            --radius: 6px;
+            --radius-lg: 10px;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
+            line-height: 1.65;
+            min-height: 100vh;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code,
+        .mono {
+            font-family: var(--mono);
+            font-size: 0.875em;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+        }
+
+        /* ── Layout ── */
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* ── Nav ── */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            background: rgba(13, 17, 23, 0.92);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+        }
+
+        nav .inner {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .nav-brand {
+            font-family: var(--mono);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .nav-brand:hover {
+            text-decoration: none;
+        }
+
+        .nav-brand .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            flex-shrink: 0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--muted);
+            font-size: 0.875rem;
+            transition: color .15s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .nav-links .btn-gh {
+            border: 1px solid var(--border-hi);
+            border-radius: var(--radius);
+            padding: 5px 14px;
+            color: var(--text);
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: border-color .15s, background .15s;
+        }
+
+        .nav-links .btn-gh:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+            text-decoration: none;
+        }
+
+        /* ── Hero ── */
+        .hero {
+            padding: 5rem 0 4rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .hero-eyebrow {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--accent);
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            margin-bottom: 1.25rem;
+        }
+
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 300;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+            margin-bottom: 1.25rem;
+            color: var(--text);
+        }
+
+        .hero h1 strong {
+            font-weight: 500;
+        }
+
+        .hero-lead {
+            font-size: 1.1rem;
+            color: var(--muted);
+            max-width: 600px;
+            margin-bottom: 2rem;
+            line-height: 1.7;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #0d1117;
+            border: none;
+            border-radius: var(--radius);
+            padding: 10px 22px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            font-family: var(--sans);
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity .15s;
+        }
+
+        .btn-primary:hover {
+            opacity: .85;
+            text-decoration: none;
+        }
+
+        .btn-secondary {
+            border: 1px solid var(--border-hi);
+            color: var(--text);
+            border-radius: var(--radius);
+            padding: 10px 22px;
+            font-size: 0.9rem;
+            font-family: var(--sans);
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: border-color .15s, background .15s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+            text-decoration: none;
+        }
+
+        /* ── Quick start strip ── */
+        .quickstart {
+            margin: 2.5rem 0 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem 1.5rem;
+        }
+
+        .quickstart-label {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            margin-bottom: .75rem;
+        }
+
+        .quickstart pre {
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            color: var(--text);
+            line-height: 2;
+            overflow-x: auto;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .quickstart pre .cmd {
+            color: var(--accent);
+        }
+
+        .quickstart pre .cmt {
+            color: var(--muted);
+        }
+
+        /* ── Section ── */
+        section {
+            padding: 4rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        section:last-of-type {
+            border-bottom: none;
+        }
+
+        .section-label {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .12em;
+            margin-bottom: 1rem;
+        }
+
+        section h2 {
+            font-size: 1.6rem;
+            font-weight: 400;
+            margin-bottom: .75rem;
+            color: var(--text);
+        }
+
+        section .lead {
+            color: var(--muted);
+            max-width: 560px;
+            margin-bottom: 2.5rem;
+        }
+
+        /* ── Services grid ── */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .service-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            transition: background .15s;
+        }
+
+        .service-card:hover {
+            background: var(--bg-subtle);
+        }
+
+        .service-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .service-card h3 {
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: .4rem;
+            color: var(--text);
+        }
+
+        .service-card .image-name {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: .6rem;
+        }
+
+        .service-card p {
+            font-size: 0.85rem;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        /* ── Architecture diagram ── */
+        .arch-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 2;
+            overflow-x: auto;
+        }
+
+        .arch-box .hl {
+            color: var(--text);
+        }
+
+        .arch-box .ac {
+            color: var(--accent);
+        }
+
+        .arch-box .gr {
+            color: var(--green);
+        }
+
+        .arch-box .am {
+            color: var(--amber);
+        }
+
+        /* ── Requirements list ── */
+        .req-list {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: .75rem;
+        }
+
+        .req-list li {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: .75rem 1rem;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: flex-start;
+            gap: .6rem;
+        }
+
+        .req-list li::before {
+            content: '—';
+            color: var(--accent);
+            font-family: var(--mono);
+            flex-shrink: 0;
+        }
+
+        /* ── Docs links ── */
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: .75rem;
+        }
+
+        .doc-link {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem 1.1rem;
+            display: flex;
+            flex-direction: column;
+            gap: .3rem;
+            transition: border-color .15s, background .15s;
+            text-decoration: none;
+        }
+
+        .doc-link:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+            text-decoration: none;
+        }
+
+        .doc-link .doc-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .doc-link .doc-desc {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        /* ── Footer ── */
+        footer {
+            padding: 2.5rem 0;
+            border-top: 1px solid var(--border);
+        }
+
+        footer .inner {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        footer p {
+            font-size: 0.825rem;
+            color: var(--muted);
+        }
+
+        footer a {
+            color: var(--muted);
+        }
+
+        footer a:hover {
+            color: var(--accent);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .nav-links a:not(.btn-gh) {
+                display: none;
+            }
+
+            .hero {
+                padding: 3rem 0 2.5rem;
+            }
+
+            .arch-box {
+                font-size: 0.7rem;
+                padding: 1.25rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <div class="inner">
+            <a class="nav-brand" href="#">
+                <span class="dot"></span>
+                wikibase-data-services
+            </a>
+            <div class="nav-links">
+                <a href="#services">Services</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#docs">Docs</a>
+                <a class="btn-gh" href="https://github.com/lucamauri/wikibase-data-services">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path
+                            d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+                    </svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container">
+
+            <!-- ── Hero ── -->
+            <div class="hero">
+                <p class="hero-eyebrow">Docker Compose · Wikibase · GPL v2</p>
+                <h1>Auxiliary data services<br>for <strong>self-hosted Wikibase</strong></h1>
+                <p class="hero-lead">
+                    A production-ready Docker Compose stack that adds SPARQL querying, full-text search,
+                    and batch editing to an existing Wikibase installation running on a native LAMP stack.
+                    No MediaWiki or MariaDB containers included — just the services you are missing.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn-primary" href="https://github.com/lucamauri/wikibase-data-services">
+                        View on GitHub →
+                    </a>
+                    <a class="btn-secondary"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/README.md">
+                        Read the docs
+                    </a>
+                </div>
+
+                <div class="quickstart">
+                    <p class="quickstart-label">Quick start</p>
+                    <pre><span class="cmt"># Clone and configure</span>
+<span class="cmd">git clone</span> https://github.com/lucamauri/wikibase-data-services
+<span class="cmd">cp</span> template.env .env  <span class="cmt"># then fill in your values</span>
+
+<span class="cmt"># Start the stack</span>
+<span class="cmd">docker compose up -d</span>
+<span class="cmd">docker compose ps</span>  <span class="cmt"># all services should be healthy</span></pre>
+                </div>
+            </div>
+
+            <!-- ── Services ── -->
+            <section id="services">
+                <p class="section-label">What's included</p>
+                <h2>Six containerised services</h2>
+                <p class="lead">Each service handles one concern. Together they fill the gap between a bare LAMP
+                    Wikibase and a fully featured wiki platform.</p>
+
+                <div class="services-grid">
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#1f3a5f; color:var(--accent)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                <path d="M3 5v14a9 3 0 0018 0V5" />
+                                <path d="M3 12a9 3 0 0018 0" />
+                            </svg>
+                        </div>
+                        <h3>WDQS — Blazegraph</h3>
+                        <p class="image-name">wikibase/wdqs:2</p>
+                        <p>SPARQL query engine over your Wikibase entity data. Stores RDF triples and answers graph
+                            queries in real time.</p>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#1a3625; color:var(--green)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <polyline points="17 1 21 5 17 9" />
+                                <path d="M3 11V9a4 4 0 014-4h14" />
+                                <polyline points="7 23 3 19 7 15" />
+                                <path d="M21 13v2a4 4 0 01-4 4H3" />
+                            </svg>
+                        </div>
+                        <h3>WDQS Updater</h3>
+                        <p class="image-name">wikibase/wdqs:2</p>
+                        <p>Polls the Wikibase API for recent changes and pushes them into Blazegraph. Polling interval
+                            is configurable via <code>UPDATER_DELAY</code>.</p>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#1f3a5f; color:var(--accent)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                        </div>
+                        <h3>WDQS Frontend</h3>
+                        <p class="image-name">wikibase/wdqs-frontend:2</p>
+                        <p>Browser-based SPARQL query editor. Serves a clean <code>/sparql</code> endpoint URL. Fully
+                            brandable via environment variables.</p>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#2d2a1a; color:var(--amber)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <rect x="2" y="3" width="20" height="14" rx="2" />
+                                <line x1="8" y1="21" x2="16" y2="21" />
+                                <line x1="12" y1="17" x2="12" y2="21" />
+                            </svg>
+                        </div>
+                        <h3>Elasticsearch</h3>
+                        <p class="image-name">wikibase/elasticsearch:1</p>
+                        <p>Full-text search backend for the MediaWiki CirrusSearch extension. Exposed on
+                            <code>127.0.0.1:9200</code> — not publicly accessible.</p>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#1a3625; color:var(--green)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                        </div>
+                        <h3>QuickStatements</h3>
+                        <p class="image-name">custom build</p>
+                        <p>Batch editing tool for Wikibase, patched for self-hosted operation. Fixes missing
+                            <code>mysqli</code>, adds a cron batch runner, and injects OAuth credentials securely.</p>
+                    </div>
+
+                    <div class="service-card">
+                        <div class="service-icon" style="border-color:#2d3748; color:var(--muted)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.8" aria-hidden="true">
+                                <polyline points="17 1 21 5 17 9" />
+                                <line x1="3" y1="5" x2="21" y2="5" />
+                                <polyline points="7 23 3 19 7 15" />
+                                <line x1="21" y1="19" x2="3" y2="19" />
+                            </svg>
+                        </div>
+                        <h3>Traefik</h3>
+                        <p class="image-name">traefik:3</p>
+                        <p>Internal HTTP router. Routes traffic from your host reverse proxy to the correct container by
+                            <code>Host</code> header. No TLS — terminated by Apache.</p>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ── Architecture ── -->
+            <section id="architecture">
+                <p class="section-label">How it fits together</p>
+                <h2>Architecture overview</h2>
+                <p class="lead">Designed for deployments where Apache already handles TLS. Traefik stays on loopback and
+                    never touches the public internet.</p>
+
+                <div class="arch-box">
+                    <span>Internet</span><br>
+                    &nbsp;&nbsp;│<br>
+                    &nbsp;&nbsp;▼<br>
+                    <span class="hl">Apache :443</span>&nbsp;&nbsp;<span>TLS termination · certbot ·
+                        host-managed</span><br>
+                    &nbsp;&nbsp;│<br>
+                    &nbsp;&nbsp;▼<br>
+                    <span class="am">Anubis :8923</span>&nbsp;&nbsp;<span>bot filtering · rate limiting
+                        (optional)</span><br>
+                    &nbsp;&nbsp;│<br>
+                    &nbsp;&nbsp;▼<br>
+                    <span class="hl">Apache :8080</span>&nbsp;&nbsp;<span>internal backend · loopback only</span><br>
+                    &nbsp;&nbsp;│<br>
+                    &nbsp;&nbsp;▼<br>
+                    <span class="ac">Traefik :8880</span>&nbsp;&nbsp;<span>routes by Host header · 127.0.0.1
+                        only</span><br>
+                    &nbsp;&nbsp;│<br>
+                    &nbsp;&nbsp;├──► <span
+                        class="gr">wdqs-frontend</span>&nbsp;&nbsp;&nbsp;<span>query.your-wiki.org</span><br>
+                    &nbsp;&nbsp;└──► <span class="gr">quickstatements</span>&nbsp;<span>qs.your-wiki.org</span>
+                </div>
+            </section>
+
+            <!-- ── Requirements ── -->
+            <section id="requirements">
+                <p class="section-label">Prerequisites</p>
+                <h2>What you need first</h2>
+                <p class="lead">This stack assumes Wikibase is already running. It adds the services Wikibase doesn't
+                    include.</p>
+                <ul class="req-list">
+                    <li>Docker 24.0 or later</li>
+                    <li>Docker Compose V2 (<code>docker compose</code>)</li>
+                    <li>Wikibase on a native LAMP stack</li>
+                    <li>Apache, Nginx, or Caddy for TLS</li>
+                    <li>~3 GB available RAM for the full stack</li>
+                    <li>A public hostname for SPARQL and QuickStatements</li>
+                </ul>
+            </section>
+
+            <!-- ── Docs ── -->
+            <section id="docs">
+                <p class="section-label">Documentation</p>
+                <h2>Guides and references</h2>
+                <p class="lead">Step-by-step guides for every part of the setup, from data loading to OAuth
+                    registration.</p>
+
+                <div class="docs-grid">
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/data-loading.md">
+                        <span class="doc-title">Data loading</span>
+                        <span class="doc-desc">Initial Blazegraph population from a Wikibase RDF dump</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/data-migration.md">
+                        <span class="doc-title">Data migration</span>
+                        <span class="doc-desc">Moving Blazegraph and Elasticsearch to a new server</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/quickstatements-oauth-setup.md">
+                        <span class="doc-title">QuickStatements OAuth</span>
+                        <span class="doc-desc">Registering and approving an OAuth consumer on Wikibase</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/quickstatements-database-setup.md">
+                        <span class="doc-title">QuickStatements database</span>
+                        <span class="doc-desc">MariaDB setup for batch processing on the host</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/elasticsearch-setup.md">
+                        <span class="doc-title">Elasticsearch setup</span>
+                        <span class="doc-desc">Connecting MediaWiki CirrusSearch to the container</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/examples/apache/">
+                        <span class="doc-title">Apache examples</span>
+                        <span class="doc-desc">VirtualHost configurations for WDQS and QuickStatements</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/manuals/decisions/">
+                        <span class="doc-title">Architecture decisions</span>
+                        <span class="doc-desc">ADRs explaining key design choices and trade-offs</span>
+                    </a>
+                    <a class="doc-link"
+                        href="https://github.com/lucamauri/wikibase-data-services/blob/main/CONTRIBUTING.md">
+                        <span class="doc-title">Contributing</span>
+                        <span class="doc-desc">Issues, pull requests, and conventional commits guide</span>
+                    </a>
+                </div>
+            </section>
+
+        </div><!-- /container -->
+    </main>
+
+    <footer>
+        <div class="inner">
+            <p>
+                <a href="https://github.com/lucamauri/wikibase-data-services">lucamauri/wikibase-data-services</a>
+                &nbsp;·&nbsp; GPL v2
+                &nbsp;·&nbsp; Images by <a href="https://hub.docker.com/u/wikibase">Wikimedia Germany</a>
+            </p>
+            <span class="badge"><span class="dot"></span>production-ready</span>
+        </div>
+    </footer>
+
+</body>
+
+</html>
