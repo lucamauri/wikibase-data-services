@@ -80,7 +80,7 @@ if [ -z "${WIKIBASE_CONCEPT_URI:-}" ]; then
   echo "ERROR: WIKIBASE_CONCEPT_URI is required but is not set."
   echo "       It should be assembled in docker-compose.yml as:"
   echo "       \${WIKIBASE_SCHEME}://\${WIKIBASE_HOST}/"
-  echo "       Do NOT set it in .env — see docs/decisions/005-concept-uri-assembly.md"
+  echo "       Do NOT set it in .env — see manuals/decisions/005-concept-uri-assembly.md"
   exit 1
 fi
 

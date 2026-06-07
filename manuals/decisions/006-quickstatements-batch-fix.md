@@ -113,7 +113,7 @@ start. `ToolforgeCommon` derives a second DB name from the first by replacing
 `_p` with `_auth` (`qsbot__quickstatements_p` → `qsbot__quickstatements_auth`).
 Both databases need identical schemas.
 
-See [docs/quickstatements-database-setup.md](../quickstatements-database-setup.md)
+See [manuals/quickstatements-database-setup.md](../quickstatements-database-setup.md)
 for the full step-by-step procedure including MariaDB bind address configuration,
 firewall rules, database creation, and schema initialisation.
 
@@ -171,7 +171,7 @@ site-specific customisation.
 
 ## Host-side infrastructure requirements
 
-See [docs/quickstatements-database-setup.md](../quickstatements-database-setup.md)
+See [manuals/quickstatements-database-setup.md](../quickstatements-database-setup.md)
 for the complete host-side setup procedure. The requirements in summary:
 
 - MariaDB must listen on both `127.0.0.1` and `172.18.0.1` (Docker bridge gateway)
@@ -229,8 +229,8 @@ Two potential blockers to be aware of:
 | `config/quickstatements-replica.my.cnf` | New — DB credentials template |
 | `docker-compose.yml` | `image:` → `build:`, `extra_hosts`, new volumes, new env vars, pinned subnet |
 | `.env` / `template.env` | Added `QS_DB_USER`, `QS_DB_PASSWORD` |
-| `docs/quickstatements-database-setup.md` | New — host-side database setup guide |
-| `docs/decisions/006-quickstatements-batch-fix.md` | This file |
+| `manuals/quickstatements-database-setup.md` | New — host-side database setup guide |
+| `manuals/decisions/006-quickstatements-batch-fix.md` | This file |
 
 ---
 

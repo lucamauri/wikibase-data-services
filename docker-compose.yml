@@ -24,7 +24,7 @@
 #   Traefik listens on 127.0.0.1:${TRAEFIK_HOST_PORT} (default 8880).
 #   Your host reverse proxy (Apache, Nginx, Caddy…) must proxy traffic for
 #   WDQS_PUBLIC_HOST and QUICKSTATEMENTS_PUBLIC_HOST to that port.
-#   See docs/apache-integration.md for Apache vhost examples.
+#   See manuals/apache-integration.md for Apache vhost examples.
 #
 #   For standalone use without a host reverse proxy, set
 #   TRAEFIK_BIND_ADDRESS=0.0.0.0 in .env so Traefik is publicly reachable.

@@ -30,7 +30,7 @@ Please redact any credentials or private hostnames before posting logs.
 3. **Test your changes** locally with `docker compose up -d` and verify
    all containers reach healthy status.
 4. **Update documentation** if your change affects behaviour described
-   in `docs/` or `template.env`.
+   in `manuals/` or `template.env`.
 5. **Open a pull request** against `main` with a clear description of
    what the change does and why.
 

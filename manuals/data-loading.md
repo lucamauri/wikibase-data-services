@@ -9,7 +9,7 @@ changes that happen *after* it starts, and will not back-fill historical data.
 A full RDF dump load is required to populate Blazegraph with your existing data.
 
 > If you are migrating data from an existing server rather than loading from
-> scratch, see [docs/data-migration.md](data-migration.md) instead.
+> scratch, see [manuals/data-migration.md](data-migration.md) instead.
 
 ---
 

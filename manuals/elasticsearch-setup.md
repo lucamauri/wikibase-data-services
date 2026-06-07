@@ -195,4 +195,4 @@ no Wikibase data is lost, only the search index, which is fully
 regenerable from MediaWiki page content.
 
 For volume backup and migration procedures, see
-[docs/data-migration.md](data-migration.md).
+[manuals/data-migration.md](data-migration.md).

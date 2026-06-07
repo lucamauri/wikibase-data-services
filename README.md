@@ -76,7 +76,7 @@ WIKIBASE_EXAMPLES_PAGE=Help:SPARQL_query_examples
 > `docker-compose.yml` from `WIKIBASE_SCHEME` and `WIKIBASE_HOST`. Setting it
 > manually — especially with a `/entity/` suffix — causes `BadSubjectException`
 > in the WDQS updater and silently breaks Blazegraph synchronisation. See
-> [docs/decisions/005-concept-uri-assembly.md](docs/decisions/005-concept-uri-assembly.md)
+> [manuals/decisions/005-concept-uri-assembly.md](manuals/decisions/005-concept-uri-assembly.md)
 > for the full explanation.
 
 ---
@@ -88,7 +88,7 @@ must forward requests for `WDQS_FRONTEND_PUBLIC_HOST` and
 `QUICKSTATEMENTS_PUBLIC_HOST` to that port, preserving the `Host` header.
 
 Example Apache VirtualHost configurations are provided in
-[docs/examples/apache/](docs/examples/apache/). Copy the relevant file,
+[manuals/examples/apache/](manuals/examples/apache/). Copy the relevant file,
 replace the placeholder values, and enable the site.
 
 Four rules that are easy to get wrong:
@@ -115,7 +115,7 @@ Internet → Apache :443 (TLS) → Anubis :[::1]:8923 → Apache :[::1]:8080 →
 
 Without Anubis, Apache proxies directly from `:443` to the internal `:8080`
 backend. The Apache VirtualHost examples in
-[docs/examples/apache/](docs/examples/apache/) show both configurations.
+[manuals/examples/apache/](manuals/examples/apache/) show both configurations.
 
 ---
 
@@ -126,11 +126,11 @@ changes that happen after it starts — it will not back-fill your existing
 Wikibase data.
 
 You must perform an initial load from a Wikibase RDF dump before starting
-the full stack. See [docs/data-loading.md](docs/data-loading.md) for the
+the full stack. See [manuals/data-loading.md](manuals/data-loading.md) for the
 step-by-step procedure.
 
 If you are migrating an existing deployment to a new server, see
-[docs/data-migration.md](docs/data-migration.md) instead.
+[manuals/data-migration.md](manuals/data-migration.md) instead.
 
 ---
 
@@ -140,14 +140,14 @@ QuickStatements requires two one-time setup steps before first use:
 
 **1. Database setup** — Two MariaDB databases must be created on the host
 and initialised with a MariaDB 11+ compatible schema before starting the
-container. See [docs/quickstatements-database-setup.md](docs/quickstatements-database-setup.md)
+container. See [manuals/quickstatements-database-setup.md](manuals/quickstatements-database-setup.md)
 for the full procedure including bind address configuration, firewall rules,
 and schema initialisation.
 
 **2. OAuth registration** — QuickStatements authenticates users via OAuth 1.0a
 against your Wikibase instance. An OAuth consumer must be registered on your
 wiki by a wiki administrator before users can log in. See
-[docs/quickstatements-oauth-setup.md](docs/quickstatements-oauth-setup.md)
+[manuals/quickstatements-oauth-setup.md](manuals/quickstatements-oauth-setup.md)
 for the step-by-step registration and approval walkthrough.
 
 ---
@@ -171,7 +171,7 @@ php maintenance/run.php updateSearchIndexConfig
 php maintenance/run.php forceSearchIndex
 ```
 
-See [docs/elasticsearch-setup.md](docs/elasticsearch-setup.md) for the full
+See [manuals/elasticsearch-setup.md](manuals/elasticsearch-setup.md) for the full
 setup guide, re-indexing instructions, and memory tuning.
 
 ---
@@ -189,7 +189,7 @@ at all.
 
 **Fix:** Remove `WIKIBASE_CONCEPT_URI` from `.env` entirely. It is assembled
 automatically in `docker-compose.yml`. See
-[docs/decisions/005-concept-uri-assembly.md](docs/decisions/005-concept-uri-assembly.md).
+[manuals/decisions/005-concept-uri-assembly.md](manuals/decisions/005-concept-uri-assembly.md).
 
 ---
 
@@ -248,7 +248,7 @@ docker compose build quickstatements
 docker compose up -d quickstatements
 ```
 
-See [docs/decisions/006-quickstatements-batch-fix.md](docs/decisions/006-quickstatements-batch-fix.md)
+See [manuals/decisions/006-quickstatements-batch-fix.md](manuals/decisions/006-quickstatements-batch-fix.md)
 for the full explanation of all four issues and their fixes.
 
 ---
@@ -273,22 +273,22 @@ docker exec wikibase-data-services-quickstatements-1 \
   | python3 -m json.tool | head -6
 ```
 
-See [docs/decisions/006-quickstatements-batch-fix.md](docs/decisions/006-quickstatements-batch-fix.md)
+See [manuals/decisions/006-quickstatements-batch-fix.md](manuals/decisions/006-quickstatements-batch-fix.md)
 for the full explanation.
 
 ---
 
 ## Architecture decisions
 
-Key design decisions are documented in [docs/decisions/](docs/decisions/):
+Key design decisions are documented in [manuals/decisions/](manuals/decisions/):
 
 | ADR | Decision |
 |---|---|
-| [001](docs/decisions/001-no-wikibase-in-docker.md) | Wikibase and MariaDB run on the host, not in Docker |
-| [002](docs/decisions/002-traefik-internal-only.md) | Traefik handles internal routing only; TLS terminated externally |
-| [004](docs/decisions/004-wdqs-proxy-removal.md) | wdqs-proxy removed; wdqs-frontend connects directly to Blazegraph |
-| [005](docs/decisions/005-concept-uri-assembly.md) | WIKIBASE_CONCEPT_URI assembled in docker-compose.yml, not in .env |
-| [006](docs/decisions/006-quickstatements-batch-fix.md) | QuickStatements batch processing fix for self-hosted deployment |
+| [001](manuals/decisions/001-no-wikibase-in-docker.md) | Wikibase and MariaDB run on the host, not in Docker |
+| [002](manuals/decisions/002-traefik-internal-only.md) | Traefik handles internal routing only; TLS terminated externally |
+| [004](manuals/decisions/004-wdqs-proxy-removal.md) | wdqs-proxy removed; wdqs-frontend connects directly to Blazegraph |
+| [005](manuals/decisions/005-concept-uri-assembly.md) | WIKIBASE_CONCEPT_URI assembled in docker-compose.yml, not in .env |
+| [006](manuals/decisions/006-quickstatements-batch-fix.md) | QuickStatements batch processing fix for self-hosted deployment |
 
 ---
 
