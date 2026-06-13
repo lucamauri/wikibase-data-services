@@ -646,7 +646,8 @@
                         <h3>Elasticsearch</h3>
                         <p class="image-name">wikibase/elasticsearch:1</p>
                         <p>Full-text search backend for the MediaWiki CirrusSearch extension. Exposed on
-                            <code>127.0.0.1:9200</code> — not publicly accessible.</p>
+                            <code>127.0.0.1:9200</code> — not publicly accessible.
+                        </p>
                     </div>
 
                     <div class="service-card">
@@ -660,7 +661,8 @@
                         <h3>QuickStatements</h3>
                         <p class="image-name">custom build</p>
                         <p>Batch editing tool for Wikibase, patched for self-hosted operation. Fixes missing
-                            <code>mysqli</code>, adds a cron batch runner, and injects OAuth credentials securely.</p>
+                            <code>mysqli</code>, adds a cron batch runner, and injects OAuth credentials securely.
+                        </p>
                     </div>
 
                     <div class="service-card">
@@ -676,7 +678,8 @@
                         <h3>Traefik</h3>
                         <p class="image-name">traefik:3</p>
                         <p>Internal HTTP router. Routes traffic from your host reverse proxy to the correct container by
-                            <code>Host</code> header. No TLS — terminated by Apache.</p>
+                            <code>Host</code> header. No TLS — terminated by Apache.
+                        </p>
                     </div>
 
                 </div>
@@ -721,7 +724,7 @@
                     include.</p>
                 <ul class="req-list">
                     <li>Docker 24.0 or later</li>
-                    <li>Docker Compose V2 (<code>docker compose</code>)</li>
+                    <li>Docker Compose V2</li>
                     <li>Wikibase on a native LAMP stack</li>
                     <li>Apache, Nginx, or Caddy for TLS</li>
                     <li>~3 GB available RAM for the full stack</li>
@@ -788,7 +791,9 @@
             <p>
                 <a href="https://github.com/lucamauri/wikibase-data-services">lucamauri/wikibase-data-services</a>
                 &nbsp;·&nbsp; GPL v2
-                &nbsp;·&nbsp; Images by <a href="https://hub.docker.com/u/wikibase">Wikimedia Germany</a>
+                <br />
+                In the spirit of IDIC 🖖🏻 forged at <a href="https://wikitrek.org">Wikitrek</a>, shared freely with the
+                Galaxy
             </p>
             <span class="badge"><span class="dot"></span>production-ready</span>
         </div>
