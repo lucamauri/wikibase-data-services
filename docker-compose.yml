@@ -194,21 +194,12 @@ services:
       dockerfile: Dockerfile.quickstatements
     restart: unless-stopped
     extra_hosts:
-      # Redirect Wikimedia Toolforge DB hostname to the Docker bridge
-      # gateway, where host MariaDB listens on port 3306.
-      # This allows ToolforgeCommon (magnustools) to connect to our
-      # local MariaDB without code changes.
       - "tools.db.svc.wikimedia.cloud:172.18.0.1"
     volumes:
-      # Persistent data volume (OAuth token storage, logs)
       - quickstatements-data:/quickstatements/data
-      # OAuth credentials template — substituted at container startup
       - ./config/quickstatements-oauth.ini:/templates/oauth.ini
-      # Site configuration template — substituted at container startup
       - ./config/quickstatements-config.json:/templates/config.json
-      # DB credentials template — substituted by our wrapper entrypoint
       - ./config/quickstatements-replica.my.cnf:/templates/replica.my.cnf
-      # Custom favicon
       - ./config/quickstatements-favicon.ico:/var/www/html/quickstatements/public_html/favicon.ico
     labels:
       - "traefik.enable=true"
@@ -232,6 +223,18 @@ services:
       # Batch database credentials (substituted into replica.my.cnf)
       QS_DB_USER: ${QS_DB_USER}
       QS_DB_PASSWORD: ${QS_DB_PASSWORD}
+      # NEW (Fix 6): logo branding for the top-right icon in the QuickStatements
+      # UI, replacing the upstream Wikimedia Toolforge badge.
+      #
+      # WIKIBASE_LOGO is the fallback source (same logo used on WDQS Frontend).
+      # QUICKSTATEMENTS_LOGO is optional — if set in .env, it overrides the
+      # fallback. The actual fallback decision (${QUICKSTATEMENTS_LOGO:-$WIKIBASE_LOGO})
+      # happens inside quickstatements-entrypoint.sh, not here — Compose V2 does
+      # not support bash-style parameter expansion with a variable default
+      # sourced from another variable in this form, so both raw values are
+      # passed through as-is and resolved at container startup instead.
+      WIKIBASE_LOGO: ${WIKIBASE_LOGO}
+      QUICKSTATEMENTS_LOGO: ${QUICKSTATEMENTS_LOGO}
     healthcheck:
       test: curl --silent --fail localhost
       interval: 10s

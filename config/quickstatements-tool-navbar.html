@@ -1,0 +1,87 @@
+<!--
+  config/quickstatements-tool-navbar.html
+
+  Local replacement for the upstream tool-navbar.html Vue component, normally
+  fetched by QuickStatements from the Wikimedia CDN
+  (https://tools-static.wmflabs.org/magnustools/resources/vue/tool-navbar.html).
+
+  WHY THIS FILE EXISTS
+  --------------------
+  The upstream navbar hardcodes a Wikimedia Toolforge logo in the top-right
+  corner. Since the component is normally fetched directly from Wikimedia's
+  CDN at runtime (see shared.js's components_base_url), there is no upstream
+  file we can patch in the image — the browser never requests a local copy.
+
+  Our fix instead:
+    1. Ships this file — an exact copy of the upstream markup, with only the
+       <img src> changed to the ${QS_LOGO_URL} placeholder.
+    2. Copies it (via Dockerfile.quickstatements) into the QuickStatements
+       served directory, where Apache's existing DocumentRoot already exposes
+       it — no new Apache Alias needed.
+    3. Patches vue.js (see Dockerfile.quickstatements) so the 'tool-navbar'
+       entry in loadComponents([...]) becomes a local, .html-suffixed path
+       instead of a bare component name. Per shared.js's resolution logic,
+       any entry ending in .html is used as a literal path/URL, bypassing
+       components_base_url (the CDN) entirely — so only THIS component is
+       redirected locally; all other CDN-served components (wd-date,
+       wd-link, commons-thumbnail, tool-translate, etc.) are unaffected.
+    4. quickstatements-entrypoint.sh runs envsubst on this file at container
+       startup, substituting ${QS_LOGO_URL} with the operator's configured
+       logo (QUICKSTATEMENTS_LOGO, falling back to WIKIBASE_LOGO — see
+       docs/decisions/006-quickstatements-batch-fix.md, Fix 6).
+
+  If upstream changes this component's markup in a future QuickStatements
+  release, this file will silently fall out of sync (it is not re-fetched
+  from upstream automatically). Compare against a fresh copy of
+  https://tools-static.wmflabs.org/magnustools/resources/vue/tool-navbar.html
+  periodically, or after upgrading the wikibase/quickstatements:1 base image.
+-->
+<template id='tool-navbar-template'>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false"
+            aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item" style='margin-right:10px;'>
+                    <div class="btn-group" style='margin-top:9px;'>
+                        <a href='#/' class="btn btn-light" tt='toolname'></a>
+                    </div>
+                </li>
+
+                <li class="nav-item active">
+                    <div id='tooltranslate_wrapper'></div>
+                </li>
+
+                <slot name='left'></slot>
+
+            </ul>
+
+            <slot name='right'></slot>
+
+            <a style="margin:0px;padding:0px;margin-top:4px;margin-left:10px;" href="/" target='_blank'>
+                <img src="${QS_LOGO_URL}" tt_title="wmf_powered" border="0" width="32px">
+            </a>
+
+        </div>
+    </nav>
+</template>
+
+<script>
+    'use strict';
+
+    Vue.component('tool-navbar', {
+        template: '#tool-navbar-template',
+        mounted: function () {
+            if (typeof tt != 'undefined') {
+                tt.updateInterface($(this.$el));
+                tt.addILdropdown('#tooltranslate_wrapper');
+            }
+        }
+    });
+</script>

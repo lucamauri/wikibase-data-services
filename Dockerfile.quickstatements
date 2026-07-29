@@ -131,4 +131,70 @@ RUN sed -i \
 COPY config/quickstatements-entrypoint.sh /quickstatements-entrypoint.sh
 RUN chmod +x /quickstatements-entrypoint.sh
 
+# -----------------------------------------------------------------------------
+# Fix 6 — Replace the hardcoded Toolforge logo with an operator-configurable one
+# -----------------------------------------------------------------------------
+# (Fix 5 — the lowercase site-identifier fix — has no Dockerfile component;
+# it is implemented entirely in quickstatements-entrypoint.sh and
+# config/quickstatements-config.json. See docs/decisions/006-quickstatements-batch-fix.md
+# for the full numbered list of problems and fixes.)
+#
+# BACKGROUND — why this isn't a simple sed patch on an existing file
+# -------------------------------------------------------------------
+# The Toolforge-branded navbar (tool-navbar.html) is NOT shipped as a local
+# file that Apache serves. QuickStatements' vue.js calls:
+#
+#   vue_components.loadComponents(['wd-date', 'wd-link', 'tool-translate',
+#                                   'tool-navbar', 'commons-thumbnail', ...])
+#
+# and shared.js (itself fetched live from Wikimedia's CDN at
+# https://tools-static.wmflabs.org/magnustools/resources/vue/shared.js)
+# resolves any bare component name — like 'tool-navbar' — by prepending
+# components_base_url, i.e. fetching it directly from Wikimedia's CDN:
+#
+#   https://tools-static.wmflabs.org/magnustools/resources/vue/tool-navbar.html
+#
+# This happens entirely in the browser, at runtime, bypassing our container
+# completely. There is no local copy of tool-navbar.html in the served
+# DocumentRoot (/var/www/html/quickstatements/public_html) to patch.
+#
+# THE FIX — two parts
+# --------------------
+# 1. Ship our own copy of the component (config/quickstatements-tool-navbar.html)
+#    with the logo already replaced by a ${QS_LOGO_URL} placeholder, and COPY
+#    it into the served directory at resources/vue/tool-navbar.html.
+#
+# 2. Patch vue.js so the loadComponents(...) array entry changes from the bare
+#    name 'tool-navbar' to the local, .html-suffixed path
+#    'resources/vue/tool-navbar.html'. Per shared.js's own resolution logic:
+#
+#      /^(http:|https:|\/|\.)/.test(component) || /\.html$/.test(component)
+#        ? component
+#        : this.components_base_url + component + '.html'
+#
+#    any entry already ending in .html is used as a literal path, bypassing
+#    components_base_url (the CDN) entirely. This affects ONLY the
+#    'tool-navbar' entry — all other bare-named entries in the same array
+#    (wd-date, wd-link, tool-translate, commons-thumbnail) are untouched and
+#    continue loading from Wikimedia's CDN exactly as before.
+#
+# ${QS_LOGO_URL} itself is resolved at container startup by
+# quickstatements-entrypoint.sh via envsubst, using the operator's
+# QUICKSTATEMENTS_LOGO value (falling back to WIKIBASE_LOGO if unset).
+# -----------------------------------------------------------------------------
+
+# Part 1 — copy our patched local component into the served directory.
+# The file still contains the literal ${QS_LOGO_URL} placeholder at this
+# point; envsubst resolves it at container startup, not at build time,
+# since the actual logo URL is an operator-configured runtime value.
+COPY config/quickstatements-tool-navbar.html \
+     /var/www/html/quickstatements/public_html/resources/vue/tool-navbar.html
+
+# Part 2 — redirect the 'tool-navbar' component lookup to our local file.
+# sed delimiter: "|" is used instead of the default "/" because the
+# replacement path contains forward slashes.
+RUN sed -i \
+  "s|'tool-navbar'|'resources/vue/tool-navbar.html'|" \
+  /var/www/html/quickstatements/public_html/vue.js
+
 ENTRYPOINT ["/quickstatements-entrypoint.sh"]
