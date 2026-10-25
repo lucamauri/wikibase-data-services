@@ -77,8 +77,17 @@ RUN docker-php-ext-install mysqli
 # apt-get clean and rm -rf /var/lib/apt/lists/* keep the image layer small
 # by discarding the package index after installation.
 # -----------------------------------------------------------------------------
+# Fix 2b (added 2026-10-21) - upgrade ca-certificates (eMudhra CA compromise)
+# ---------------------------------------------------------------------------
+# The base image (Debian 12) ships ca-certificates 20230311, which still trusts
+# the eMudhra intermediate CAs whose private keys were compromised (Oct 2026).
+# Debian fixed this in bookworm-security as 20250419~deb12u2. Listing
+# ca-certificates next to cron makes apt upgrade it to the newest available
+# version (apt upgrades an already-installed package when a newer one exists).
+# This also keeps the image safe for future rebuilds, since a later security
+# update is picked up automatically at build time.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends cron \
+    && apt-get install -y --no-install-recommends cron ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN echo "* * * * * www-data /usr/local/bin/php \

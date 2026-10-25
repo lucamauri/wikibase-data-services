@@ -16,3 +16,6 @@ Thumbs.db
 
 # Docker runtime artifacts that may appear locally
 *.log
+
+# Temporary backup files
+*.bak*
