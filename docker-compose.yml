@@ -126,6 +126,11 @@ services:
       WDQS_HOST: wdqs
       # Used by envsubst in nginx-default.conf.template
       WIKIBASE_SCHEME: ${WIKIBASE_SCHEME}
+      # Required by the newer wdqs-frontend entrypoint (set -u aborts without it).
+      # The entrypoint strips a trailing "/w/api.php" to get the Wikibase base URL
+      # for its packaged default config; our custom config overrides the values
+      # that matter (API path /dt/api.php), so this only has to be well-formed.
+      WIKIBASE_PUBLIC_URL: ${WIKIBASE_SCHEME}://${WIKIBASE_HOST}/w/api.php
       # Used by envsubst in wdqs-frontend-config.json.template
       WIKIBASE_NAME: ${WIKIBASE_NAME}
       WIKIBASE_API_PATH: ${WIKIBASE_API_PATH}
