@@ -48,7 +48,14 @@ services:
   # Never exposed directly — all access goes through wdqs-frontend.
   # ---------------------------------------------------------------------------
   wdqs:
-    image: wikibase/wdqs:2
+    # Local build of wikibase/wdqs:2 with two compromised root CAs removed from
+    # Java's trust store (eMudhra incident, 2026-10). See Dockerfile.wdqs, which
+    # also explains how to retire this workaround once upstream ships a Java fix.
+    # wdqs and wdqs-updater share the same image; the second build is cached.
+    build:
+      context: .
+      dockerfile: Dockerfile.wdqs
+    image: wikibase-data-services-wdqs:latest
     command: /runBlazegraph.sh
     restart: unless-stopped
     # Blazegraph needs a high open-file limit to avoid this abort:
@@ -74,7 +81,14 @@ services:
   # same host — the container connects through Apache like any external client.
   # ---------------------------------------------------------------------------
   wdqs-updater:
-    image: wikibase/wdqs:2
+    # Local build of wikibase/wdqs:2 with two compromised root CAs removed from
+    # Java's trust store (eMudhra incident, 2026-10). See Dockerfile.wdqs, which
+    # also explains how to retire this workaround once upstream ships a Java fix.
+    # wdqs and wdqs-updater share the same image; the second build is cached.
+    build:
+      context: .
+      dockerfile: Dockerfile.wdqs
+    image: wikibase-data-services-wdqs:latest
     command: /runUpdate.sh
     restart: unless-stopped
     depends_on:

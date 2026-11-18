@@ -1,0 +1,59 @@
+# =============================================================================
+# Dockerfile.wdqs
+#
+# Extends the wikibase/wdqs:2 image (Blazegraph + updater) with ONE change:
+# it removes two compromised root CAs from Java's own trust store.
+#
+# WHY THIS DOCKERFILE EXISTS
+# --------------------------
+# In October 2026 the private keys of eight eMudhra intermediate CAs were found
+# to be recoverable (https://emudhra.we-have-a-problem.com). They chain to two
+# roots that Java's bundled "cacerts" still trusts:
+#   - Comodo/Sectigo "AAA Certificate Services"
+#   - "emSign ECC Root CA - G3"
+# Java does not check revocation by default, and this image ships OpenJDK
+# 1.8.0_412 (April 2024), which predates any fix. As of 2026-11-18 upstream has
+# not rebuilt the image. The Debian "ca-certificates" package is NOT installed
+# in it, so apt cannot fix this; Java uses its own file.
+#
+# WHAT IT DOES
+# ------------
+# Deletes the two root entries from Java's cacerts with keytool, as the incident
+# page recommends for systems that cannot be updated. WDQS only talks to our own
+# Wikibase (data.wikitrek.org, a Let's Encrypt certificate), so removing these
+# roots cannot affect it.
+#
+# BASE IMAGE
+# ----------
+# wikibase/wdqs:2-pinned-java8u412 is a LOCAL tag for the image that has been
+# running in production, so data format and behaviour stay exactly as tested.
+# It is NOT the newer 2026-09 build of wikibase/wdqs:2, which has not been
+# validated against our data.
+#
+# HOW TO RETIRE THIS WORKAROUND
+# -----------------------------
+# When upstream ships a Java that includes the eMudhra fix, delete this file
+# and set the wdqs and wdqs-updater services in docker-compose.yml back to
+# "image: wikibase/wdqs:2" (see docs/decisions for the update procedure).
+# =============================================================================
+
+FROM wikibase/wdqs:2-pinned-java8u412
+
+# The upstream image runs as the unprivileged user "blazegraph", which cannot
+# modify the Java trust store. Switch to root ONLY for the next step.
+USER root
+
+# Delete the two roots. keytool identifies entries by alias (the long name shown
+# by "keytool -list"); "changeit" is the public, default password of Java's
+# cacerts, not a secret. "set -eux" makes the build FAIL if an alias is not found
+# (e.g. a future base image with different aliases), so a silent no-op is impossible.
+RUN set -eux; \
+    KS=/opt/java/openjdk/lib/security/cacerts; \
+    for alias in \
+      "cn=aaa_certificate_services,o=comodo_ca_limited,l=salford,st=greater_manchester,c=gb" \
+      "cn=emsign_ecc_root_ca_-_g3,o=emudhra_technologies_limited,ou=emsign_pki,c=in"; do \
+        keytool -delete -alias "$alias" -keystore "$KS" -storepass changeit; \
+    done
+
+# Drop privileges again: the container must run as before.
+USER blazegraph
